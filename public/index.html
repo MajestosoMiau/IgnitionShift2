@@ -13,8 +13,7 @@
     <div id="navbar-container"></div>
 
     <div class="container">  
-
-         <!-- PLAYER DASHBOARD (Visible when logged in) -->
+        <!-- PLAYER DASHBOARD (Visible when logged in) -->
         <div id="player-view" style="display: none;">
             <!-- Player Header -->
             <div class="player-header-compact">
@@ -31,127 +30,126 @@
                         <i class="fas fa-gem"></i>
                         <span id="tokens">0</span>
                     </div>
+                    
                     <button onclick="logout()" class="logout-btn-compact">Logout</button>
+                </div>
+            </div>          
+
+            <!-- Main Dashboard Grid -->
+            <div class="dashboard-container">
+                <!-- Left Column: Inventory -->
+                <div class="inventory-section">
+                    <h3>Inventory</h3>
+                    <div class="inventory-controls">
+                        <div class="inventory-filters">
+                            <button class="filter-btn active" data-filter="all">All Items</button>
+                            <button class="filter-btn" data-filter="car">🚗 Cars</button>
+                            <button class="filter-btn" data-filter="engine">⚙️ Engines</button>
+                            <button class="filter-btn" data-filter="tire">🌀 Tires</button>
+                            <button class="filter-btn" data-filter="turbo">⚡ Turbos</button>
+                            <button class="filter-btn" data-filter="suspension">🔧 Suspensions</button>
+                            <button class="filter-btn" data-filter="seat">💺 Seats</button>
+                        </div>
+                        
+                        <div class="inventory-sort">
+                            <label for="sort-inventory">Sort by:</label>
+                            <select id="sort-inventory">
+                                <option value="name">Name</option>
+                                <option value="equipped">Equipped First</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="inventory-count" id="inventory-count">Loading...</div>
+                    <div id="inventory-grid" class="inventory-grid"></div>
+                </div>
+
+                <!-- Right Column: Current Vehicle & Equipped Items -->
+                <div class="equipment-section">
+                    <h3>Current Setup</h3>
+                    
+                    <div class="current-vehicle">
+                        <div class="vehicle-image-container">
+                            <img id="current-car-image" src="" alt="Current Vehicle">
+                        </div>
+                        <div class="vehicle-name" id="current-car-name">Loading...</div>
+                        <div class="vehicle-stats" id="current-car-stats">Equipped</div>
+                    </div>
+                    
+                    <div class="equipped-items-container">
+                        <h4>Equipped Parts</h4>
+                        <div id="equipped-items">
+                            <!-- Equipped items will be displayed here -->
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Main Dashboard Grid -->
-            <!-- Dashboard Layout -->
-<div class="dashboard-container">
-    <!-- Left Column: Inventory -->
-    <div class="inventory-section">
-        <h3>Inventory</h3>
-        <div class="inventory-controls">
-            <div class="inventory-filters">
-                <button class="filter-btn active" data-filter="all">All Items</button>
-                <button class="filter-btn" data-filter="car">🚗 Cars</button>
-                <button class="filter-btn" data-filter="engine">⚙️ Engines</button>
-                <button class="filter-btn" data-filter="tire">🌀 Tires</button>
-                <button class="filter-btn" data-filter="turbo">⚡ Turbos</button>
-                <button class="filter-btn" data-filter="suspension">🔧 Suspensions</button>
-                <button class="filter-btn" data-filter="seat">💺 Seats</button>
-            </div>
-            
-            <div class="inventory-sort">
-                <label for="sort-inventory">Sort by:</label>
-                <select id="sort-inventory">
-                    <option value="name">Name</option>
-                    <option value="equipped">Equipped First</option>
-                </select>
-            </div>
-        </div>
-        
-        <div class="inventory-count" id="inventory-count">Loading...</div>
-        <div id="inventory-grid" class="inventory-grid"></div>
-    </div>
+            <!-- Bottom Stats Row -->
+            <div class="stats-container">
+                <!-- Left: Attributes -->
+                <div class="attributes-section">
+                    <h3>Attributes</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span>💪 Power:</span>
+                            <span id="power-display">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>⚡ Speed:</span>
+                            <span id="speed-display">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>🎮 Dexterity:</span>
+                            <span id="dexterity-display">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>🎯 Handling:</span>
+                            <span id="handling-display">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>🛡️ Structure:</span>
+                            <span id="structure-display">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>🍀 Luck:</span>
+                            <span id="luck-display">0</span>
+                        </div>
+                    </div>
+                </div>
 
-    <!-- Right Column: Current Vehicle & Equipped Items -->
-    <div class="equipment-section">
-        <h3>Current Setup</h3>
-        
-        <div class="current-vehicle">
-            <div class="vehicle-image-container">
-                <img id="current-car-image" src="" alt="Current Vehicle">
-            </div>
-            <div class="vehicle-name" id="current-car-name">Loading...</div>
-            <div class="vehicle-stats" id="current-car-stats">Equipped</div>
-        </div>
-        
-        <div class="equipped-items-container">
-            <h4>Equipped Parts</h4>
-            <div id="equipped-items">
-                <!-- Equipped items will be displayed here -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Bottom Stats Row -->
-<div class="stats-container">
-    <!-- Left: Attributes -->
-    <div class="attributes-section">
-        <h3>Attributes</h3>
-        <div class="stats-grid">
-            <!-- Your existing attributes display -->
-            <div class="stat-item">
-                <span>💪 Power:</span>
-                <span id="power-display">0</span>
-            </div>
-            <div class="stat-item">
-                <span>⚡ Speed:</span>
-                <span id="speed-display">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🎮 Dexterity:</span>
-                <span id="dexterity-display">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🎯 Handling:</span>
-                <span id="handling-display">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🛡️ Structure:</span>
-                <span id="structure-display">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🍀 Luck:</span>
-                <span id="luck-display">0</span>
+                <!-- Right: Player Stats -->
+                <div class="player-stats-section">
+                    <h3>Player Stats</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span>⭐ Level:</span>
+                            <span id="level">1</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>📊 XP:</span>
+                            <span id="xp">0/100</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>💰 Gold:</span>
+                            <span id="gold">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>💎 Tokens:</span>
+                            <span id="tokens">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>🏆 Fame:</span>
+                            <span id="fame">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>❤️ Condition:</span>
+                            <span id="condition">100%</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Right: Player Stats -->
-    <div class="player-stats-section">
-        <h3>Player Stats</h3>
-        <div class="stats-grid">
-            <!-- Your existing player stats display -->
-            <div class="stat-item">
-                <span>⭐ Level:</span>
-                <span id="level">1</span>
-            </div>
-            <div class="stat-item">
-                <span>📊 XP:</span>
-                <span id="xp">0/100</span>
-            </div>
-            <div class="stat-item">
-                <span>💰 Gold:</span>
-                <span id="gold">0</span>
-            </div>
-            <div class="stat-item">
-                <span>💎 Tokens:</span>
-                <span id="tokens">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🏆 Fame:</span>
-                <span id="fame">0</span>
-            </div>
-            <div class="stat-item">
-                <span>❤️ Condition:</span>
-                <span id="condition">100%</span>
-            </div>
-        </div>
-    </div>
-</div>
 
         <!-- AUTH SECTION (Visible when logged out) -->
         <div class="auth-section" id="auth-section">
@@ -236,8 +234,7 @@
                 </div>
             </section>
         </div>
-
-       
+    </div>
 
     <script type="module" src="frontend.js"></script>
 </body>

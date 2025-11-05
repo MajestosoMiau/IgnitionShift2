@@ -278,15 +278,7 @@ function loadNavbar() {
                     <a href="rankings.html" class="nav-link" id="nav-rankings"><i class="fas fa-trophy"></i> Rankings</a>
                     <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions</a>
                 </div>
-                <div class="nav-user" id="nav-user" style="display: none;">
-                    <span id="player-name-nav">Racer</span>
-                    <button onclick="logout()" class="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                </div>
-                <div class="nav-guest" id="nav-guest">
-                    <a href="index.html" class="auth-nav-btn">Login</a>
-                </div>
+                
             </div>
         </nav>
     `;
@@ -324,66 +316,487 @@ function updateNavbarAuthState() {
     }
 }
 
-// ========== AUTHENTICATION FUNCTIONS ==========
-async function handleAuth(event) {
-    event.preventDefault();
+// Rest System
+class RestSystem {
+    constructor() {
+        this.isResting = false;
+        this.restEndTime = null;
+        this.selectedRestTime = null;
+        this.restInterval = null;
+        this.luckMultiplier = 1;
+        
+        this.initializeRestSystem();
+    }
     
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    const authMessage = document.getElementById("authMessage");
-
-    try {
-        let userCredential;
-        try {
-            userCredential = await signInWithEmailAndPassword(auth, email, password);
-        } catch (loginError) {
-            userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await initializeUser(userCredential.user);
+    initializeRestSystem() {
+        this.loadRestState();
+        this.renderRestSection();
+        // Delay event listeners to ensure DOM is ready
+        setTimeout(() => {
+            this.setupEventListeners();
+            this.updateActionButtons();
+        }, 100);
+        this.startRestTimer();
+    }
+    
+    renderRestSection() {
+        const restSection = document.querySelector('.rest-section');
+        if (!restSection) {
+            console.warn('Rest section not found in DOM');
+            return;
         }
-
-        const user = userCredential.user;
-        authMessage.textContent = "Login successful! Loading your data...";
-        authMessage.style.color = "green";
-        sessionStorage.setItem("playerData", JSON.stringify({ uid: user.uid, email: user.email }));
-
-    } catch (error) {
-        authMessage.textContent = `Error: ${error.message}`;
-        authMessage.style.color = "red";
+        
+        restSection.innerHTML = `
+            <h3>🛌 Rest & Recovery</h3>
+            ${this.isResting ? this.renderActiveRest() : this.renderRestOptions()}
+        `;
+        
+        // Re-attach event listeners after rendering
+        setTimeout(() => this.setupEventListeners(), 50);
+    }
+    
+    renderActiveRest() {
+        const timeLeft = this.getTimeLeft();
+        const progress = this.getRestProgress();
+        const rewards = this.calculateRewards();
+        
+        return `
+            <div class="rest-timer">
+                <div class="rest-time-remaining">${this.formatTime(timeLeft)}</div>
+                <div class="rest-progress">
+                    <div class="rest-progress-bar" style="width: ${progress}%"></div>
+                </div>
+                <div style="color: #88ffff; font-size: 0.8rem;">Resting in progress...</div>
+            </div>
+            
+            <div class="rest-benefits">
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.condition}%</div>
+                    <div class="rest-benefit-label">Condition Recovery</div>
+                </div>
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.xp}</div>
+                    <div class="rest-benefit-label">XP Gained</div>
+                </div>
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.gold}</div>
+                    <div class="rest-benefit-label">Gold Gained</div>
+                </div>
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">${this.luckMultiplier.toFixed(1)}x</div>
+                    <div class="rest-benefit-label">Luck Bonus</div>
+                </div>
+            </div>
+            
+            <div class="rest-actions">
+                <button class="cancel-rest-btn" type="button">
+                    ⏹️ Cancel Rest
+                </button>
+            </div>
+            
+            <div style="text-align: center; margin-top: 1rem; color: #88ffff; font-size: 0.8rem;">
+                ⚠️ While resting, you can only manage inventory and trade items.
+            </div>
+        `;
+    }
+    
+    renderRestOptions() {
+        const restTimes = [1, 2, 3, 4, 5, 6, 7, 8];
+        
+        return `
+            <div style="margin-bottom: 1rem; color: #88ffff;">
+                Select rest duration to rapidly recover condition and earn rewards based on your luck.
+            </div>
+            
+            <div class="rest-options">
+                ${restTimes.map(hours => `
+                    <div class="rest-option ${this.selectedRestTime === hours ? 'selected' : ''}" 
+                         data-hours="${hours}">
+                        ${hours}h
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${this.selectedRestTime ? this.renderRestPreview() : ''}
+            
+            <div class="rest-actions">
+                <button class="start-rest-btn" type="button" ${!this.selectedRestTime ? 'disabled' : ''}>
+                    🛌 Start Resting
+                </button>
+            </div>
+        `;
+    }
+    
+    renderRestPreview() {
+        const rewards = this.calculateRewards();
+        
+        return `
+            <div class="rest-benefits">
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.condition}%</div>
+                    <div class="rest-benefit-label">Condition</div>
+                </div>
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.xp}</div>
+                    <div class="rest-benefit-label">XP</div>
+                </div>
+                <div class="rest-benefit">
+                    <div class="rest-benefit-value">+${rewards.gold}</div>
+                    <div class="rest-benefit-label">Gold</div>
+                </div>
+            </div>
+            
+            <div class="rest-luck-bonus">
+                <div class="label">Luck Bonus Multiplier</div>
+                <div class="value">${this.luckMultiplier.toFixed(1)}x</div>
+            </div>
+        `;
+    }
+    
+    selectRestTime(hours) {
+        this.selectedRestTime = hours;
+        this.calculateLuckBonus();
+        this.renderRestSection();
+    }
+    
+    calculateLuckBonus() {
+        // Safely get player luck with fallbacks
+        let playerLuck = 50; // default
+        if (window.gameState?.player?.stats?.luck) {
+            playerLuck = window.gameState.player.stats.luck;
+        } else if (window.gameState?.player?.luck) {
+            playerLuck = window.gameState.player.luck;
+        }
+        this.luckMultiplier = 0.5 + (playerLuck / 100) * 1.5;
+    }
+    
+    calculateRewards() {
+        if (!this.selectedRestTime) return { condition: 0, xp: 0, gold: 0 };
+        
+        const baseCondition = this.selectedRestTime * 12;
+        const baseXP = this.selectedRestTime * 25;
+        const baseGold = this.selectedRestTime * 15;
+        
+        return {
+            condition: Math.floor(baseCondition * this.luckMultiplier),
+            xp: Math.floor(baseXP * this.luckMultiplier),
+            gold: Math.floor(baseGold * this.luckMultiplier)
+        };
+    }
+    
+    startRest() {
+        if (!this.selectedRestTime || this.isResting) {
+            this.showNotification('Please select a rest time first!');
+            return;
+        }
+        
+        this.isResting = true;
+        this.restEndTime = Date.now() + (this.selectedRestTime * 60 * 60 * 1000);
+        
+        document.body.classList.add('resting');
+        this.saveRestState();
+        this.renderRestSection();
+        this.showNotification(`Started resting for ${this.selectedRestTime} hours!`);
+        this.startRestTimer();
+        
+        // Update buttons after a short delay to ensure UI is updated
+        setTimeout(() => this.updateActionButtons(), 100);
+    }
+    
+    cancelRest() {
+        if (!this.isResting) return;
+        
+        this.isResting = false;
+        this.restEndTime = null;
+        this.selectedRestTime = null;
+        
+        document.body.classList.remove('resting');
+        this.saveRestState();
+        this.renderRestSection();
+        this.showNotification('Rest cancelled.');
+        
+        // Update buttons after a short delay
+        setTimeout(() => this.updateActionButtons(), 100);
+        
+        if (this.restInterval) {
+            clearInterval(this.restInterval);
+            this.restInterval = null;
+        }
+    }
+    
+    completeRest() {
+        if (!this.isResting) return;
+        
+        const rewards = this.calculateRewards();
+        
+        // Apply rewards safely
+        if (window.gameState?.player) {
+            window.gameState.player.condition = Math.min(100, (window.gameState.player.condition || 0) + rewards.condition);
+            window.gameState.player.xp = (window.gameState.player.xp || 0) + rewards.xp;
+            window.gameState.player.gold = (window.gameState.player.gold || 0) + rewards.gold;
+            
+            // Update UI if update function exists
+            if (window.updatePlayerStats) {
+                window.updatePlayerStats();
+            }
+        }
+        
+        this.isResting = false;
+        this.restEndTime = null;
+        this.selectedRestTime = null;
+        
+        document.body.classList.remove('resting');
+        this.saveRestState();
+        this.renderRestSection();
+        
+        this.showNotification(
+            `Rest completed! Gained: +${rewards.condition}% condition, +${rewards.xp} XP, +${rewards.gold} gold`
+        );
+        
+        // Update buttons after completion
+        setTimeout(() => this.updateActionButtons(), 100);
+        
+        if (this.restInterval) {
+            clearInterval(this.restInterval);
+            this.restInterval = null;
+        }
+    }
+    
+    updateActionButtons() {
+        // More specific selectors for training and challenge buttons
+        const trainingButtons = document.querySelectorAll(`
+            .training-btn, 
+            button[onclick*="train"], 
+            button[onclick*="Training"],
+            .training-section button,
+            [class*="train"] button
+        `);
+        
+        const challengeButtons = document.querySelectorAll(`
+            .accept-btn, 
+            .decline-btn, 
+            .challenge-btn, 
+            .challenge-claim-btn,
+            button[onclick*="challenge"],
+            button[onclick*="Challenge"],
+            .challenges-section button
+        `);
+        
+        const pvpButtons = document.querySelectorAll(`
+            .pvp-section button, 
+            button[onclick*="race"], 
+            button[onclick*="Race"],
+            button[onclick*="pvp"],
+            button[onclick*="PvP"]
+        `);
+        
+        const allRestrictedButtons = [
+            ...trainingButtons, 
+            ...challengeButtons, 
+            ...pvpButtons
+        ];
+        
+        console.log(`Found ${allRestrictedButtons.length} buttons to update`);
+        
+        allRestrictedButtons.forEach(button => {
+            if (this.isResting) {
+                // Lock buttons
+                button.disabled = true;
+                button.style.opacity = '0.5';
+                button.style.cursor = 'not-allowed';
+                button.setAttribute('title', 'Cannot perform this action while resting');
+                button.setAttribute('data-was-disabled', 'true');
+            } else {
+                // Only unlock if we disabled it
+                if (button.getAttribute('data-was-disabled') === 'true') {
+                    button.disabled = false;
+                    button.style.opacity = '1';
+                    button.style.cursor = 'pointer';
+                    button.removeAttribute('title');
+                    button.removeAttribute('data-was-disabled');
+                }
+            }
+        });
+    }
+    
+    setupEventListeners() {
+        // Remove existing listeners first to avoid duplicates
+        this.removeEventListeners();
+        
+        // Rest option selection - use event delegation for better reliability
+        const restOptions = document.querySelector('.rest-options');
+        if (restOptions) {
+            restOptions.addEventListener('click', (e) => {
+                const option = e.target.closest('.rest-option');
+                if (option) {
+                    const hours = parseInt(option.getAttribute('data-hours'));
+                    this.selectRestTime(hours);
+                }
+            });
+        }
+        
+        // Start rest button
+        const startBtn = document.querySelector('.start-rest-btn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startRest());
+        }
+        
+        // Cancel rest button
+        const cancelBtn = document.querySelector('.cancel-rest-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => this.cancelRest());
+        }
+    }
+    
+    removeEventListeners() {
+        // Clean up existing listeners if needed
+        const restOptions = document.querySelector('.rest-options');
+        if (restOptions) {
+            restOptions.replaceWith(restOptions.cloneNode(true));
+        }
+    }
+    
+    startRestTimer() {
+        if (this.restInterval) {
+            clearInterval(this.restInterval);
+        }
+        
+        this.restInterval = setInterval(() => {
+            if (!this.isResting) return;
+            
+            const timeLeft = this.getTimeLeft();
+            
+            if (timeLeft <= 0) {
+                this.completeRest();
+            } else {
+                // Only re-render every 10 seconds to improve performance
+                if (Date.now() % 10000 < 1000) {
+                    this.renderRestSection();
+                }
+            }
+        }, 1000);
+    }
+    
+    getTimeLeft() {
+        if (!this.isResting || !this.restEndTime) return 0;
+        return Math.max(0, this.restEndTime - Date.now());
+    }
+    
+    getRestProgress() {
+        if (!this.isResting || !this.selectedRestTime) return 0;
+        
+        const totalTime = this.selectedRestTime * 60 * 60 * 1000;
+        const timePassed = totalTime - this.getTimeLeft();
+        return (timePassed / totalTime) * 100;
+    }
+    
+    formatTime(milliseconds) {
+        const hours = Math.floor(milliseconds / (1000 * 60 * 60));
+        const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((milliseconds % (1000 * 60)) / 1000);
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    showNotification(message) {
+        // Remove existing notification
+        const existingNotification = document.querySelector('.rest-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create new notification
+        const notification = document.createElement('div');
+        notification.className = 'rest-notification';
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #00ff88, #00ffff);
+            color: #1a1a2e;
+            padding: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.3);
+            z-index: 1000;
+            animation: slideInRight 0.3s ease;
+        `;
+        
+        // Add animation style if not exists
+        if (!document.querySelector('#rest-notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'rest-notification-styles';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(notification);
+        
+        // Auto remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 3000);
+    }
+    
+    saveRestState() {
+        const restState = {
+            isResting: this.isResting,
+            restEndTime: this.restEndTime,
+            selectedRestTime: this.selectedRestTime
+        };
+        localStorage.setItem('playerRestState', JSON.stringify(restState));
+    }
+    
+    loadRestState() {
+        const saved = localStorage.getItem('playerRestState');
+        if (saved) {
+            try {
+                const restState = JSON.parse(saved);
+                this.isResting = restState.isResting;
+                this.restEndTime = restState.restEndTime;
+                this.selectedRestTime = restState.selectedRestTime;
+                
+                if (this.isResting && this.restEndTime && Date.now() >= this.restEndTime) {
+                    setTimeout(() => this.completeRest(), 100);
+                } else if (this.isResting) {
+                    document.body.classList.add('resting');
+                    // Update buttons when loading resting state
+                    setTimeout(() => this.updateActionButtons(), 200);
+                }
+            } catch (error) {
+                console.error('Error loading rest state:', error);
+                // Clear corrupted state
+                localStorage.removeItem('playerRestState');
+            }
+        }
     }
 }
 
-if (document.getElementById("authForm")) {
-    document.getElementById("authForm").addEventListener("submit", handleAuth);
+// Global rest check function
+function isPlayerResting() {
+    return window.restSystem && window.restSystem.isResting;
 }
 
-async function initializeUser(user) {
-    const userRef = doc(db, "users", user.uid);
-    await setDoc(userRef, {
-        username: user.email.split("@")[0],
-        email: user.email,
-        gold: 100,
-        tokens: 0,
-        fame: 0,
-        xp: 0,
-        level: 1,
-        condition: 100,
-        lastConditionUpdate: serverTimestamp(),
-        stats: { 
-            power: 5, speed: 5, dexterity: 5, structure: 5, handling: 5, luck: 5 
-        },
-        inventory: [{ 
-            id: "rusty_rider", 
-            type: "car", 
-            equipped: true,
-            name: "Rusty Rider",            
-            stats: { power: 1, speed: 1, handling: 1 }
-        }],
-        trainingCooldowns: {},
-        trainingHistory: []
-    });
-    console.log("New player initialized!");
-}
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.restSystem = new RestSystem();
+});
 
+// Update buttons when new content is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (window.restSystem) {
+            window.restSystem.updateActionButtons();
+        }
+    }, 1000);
+});
 // ========== PLAYER DATA FUNCTIONS ==========
 async function loadPlayerData(userId) {
     try {
@@ -493,9 +906,11 @@ function updateCarInfo(userData) {
     if (carName) carName.textContent = equippedCar.name || "Rusty Rider";
 }
 
+// FIXED: Equipment display for the right panel
 function updateEquipmentDisplay(userData) {
     const equippedCar = getEquippedCar(userData.inventory);
     
+    // Update car display in equipment section
     const carImage = document.getElementById("current-car-image");
     const carName = document.getElementById("current-car-name");
     const carStats = document.getElementById("current-car-stats");
@@ -514,25 +929,106 @@ function updateEquipmentDisplay(userData) {
             ];
             tryNextFallback(this, fallbacks, 0);
         };
-        carImage.onload = function() {
-            console.log(`✅ Dashboard car image loaded successfully: ${imagePath}`);
-        };
     }
     
-    if (carName) carName.textContent = equippedCar.name || "Rusty Rider";
+    if (carName) {
+        carName.textContent = equippedCar.name || "Rusty Rider";
+    }
     
     if (carStats) {
         let bonusText = '';
         if (equippedCar.stats) {
             const bonuses = [];
             Object.entries(equippedCar.stats).forEach(([stat, value]) => {
-                if (value > 0) bonuses.push(`+${value} ${stat}`);
+                if (value > 0) {
+                    bonuses.push(`+${value} ${stat}`);
+                }
             });
-            if (bonuses.length > 0) bonusText = ` • ${bonuses.join(', ')}`;
+            if (bonuses.length > 0) {
+                bonusText = ` • ${bonuses.join(', ')}`;
+            }
         }
         carStats.innerHTML = `Equipped${bonusText}`;
     }
+    
+    // Update other equipped items display
+    updateEquippedItemsDisplay(userData.inventory);
 }
+
+// FIXED: Display all equipped items in the right panel (KEEP THIS ONE - REMOVE THE DUPLICATE BELOW)
+function updateEquippedItemsDisplay(inventory) {
+    const equippedContainer = document.getElementById('equipped-items');
+    if (!equippedContainer) return;
+    
+    const equippedItems = (inventory || []).filter(item => item.equipped && item.type !== 'car');
+    
+    if (equippedItems.length === 0) {
+        equippedContainer.innerHTML = `
+            <div class="no-equipped-items">
+                <i class="fas fa-wrench"></i>
+                <p>No parts equipped</p>
+                <small>Equip items from your inventory</small>
+            </div>
+        `;
+        return;
+    }
+    
+    const equippedHTML = equippedItems.map(item => {
+        const imagePath = getInventoryImagePath(item);
+        const rarity = item.rarity || 'common';
+        const rarityColors = {
+            common: '#888888', uncommon: '#00ff88', rare: '#0077ff',
+            epic: '#a29bfe', legendary: '#feca57'
+        };
+        const color = rarityColors[rarity] || '#888888';
+        
+        let statText = '';
+        if (item.stats) {
+            const stats = [];
+            Object.entries(item.stats).forEach(([stat, value]) => {
+                if (value > 0) stats.push(`+${value} ${stat}`);
+            });
+            if (stats.length > 0) statText = `<div class="equipped-stats">${stats.join(', ')}</div>`;
+        }
+        
+        return `
+            <div class="equipped-item" data-item-id="${item.id}">
+                <div class="equipped-item-header">
+                    <div class="equipped-item-rarity" style="color: ${color}">${rarity.toUpperCase()}</div>
+                    <button class="unequip-small-btn" onclick="unequipItem('${item.id}', '${item.type}')" title="Unequip">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="equipped-item-image">
+                    <img src="${imagePath}" 
+                         alt="${item.name}"
+                         onerror="handleEquippedImageError(this, '${item.id}', '${item.type}')">
+                    <div class="equipped-item-fallback">
+                        <i class="${getItemIcon(item.type)}"></i>
+                    </div>
+                </div>
+                <div class="equipped-item-info">
+                    <div class="equipped-item-name">${item.name}</div>
+                    <div class="equipped-item-type">${formatItemType(item.type)}</div>
+                    ${statText}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    equippedContainer.innerHTML = equippedHTML;
+}
+
+// NEW: Handle equipped item image errors
+window.handleEquippedImageError = function(imgElement, itemId, itemType) {
+    console.log(`Equipped item image failed: ${imgElement.src}`);
+    
+    const fallbackIcon = imgElement.nextElementSibling;
+    if (fallbackIcon && fallbackIcon.classList.contains('equipped-item-fallback')) {
+        imgElement.style.display = 'none';
+        fallbackIcon.style.display = 'flex';
+    }
+};
 
 function tryNextFallback(imgElement, fallbacks, index) {
     if (index >= fallbacks.length) {
@@ -940,6 +1436,7 @@ async function loadRankings() {
     }
 }
 
+// Update the rankings display to include challenge buttons
 function displayRankings(players, startRank) {
     const rankingsTbody = document.getElementById('rankings-tbody');
     if (!rankingsTbody) return;
@@ -947,15 +1444,17 @@ function displayRankings(players, startRank) {
     if (players.length === 0) {
         rankingsTbody.innerHTML = `
             <tr>
-                <td colspan="6" class="no-data-row">No players found in this range</td>
+                <td colspan="7" class="no-data-row">No players found in this range</td>
             </tr>
         `;
         return;
     }
 
+    const currentUserId = auth.currentUser?.uid;
+
     rankingsTbody.innerHTML = players.map((player, index) => {
         const rank = startRank + index;
-        const isCurrentUser = player.id === auth.currentUser?.uid;
+        const isCurrentUser = player.id === currentUserId;
         
         return `
             <tr class="${isCurrentUser ? 'current-user' : ''}">
@@ -970,14 +1469,28 @@ function displayRankings(players, startRank) {
                     </div>
                 </td>
                 <td class="fame-cell">
-                    <i class="fas fa-star"></i> ${player.fame || 0}
+                    <i class="fas fa-star"></i>
+                    ${player.fame || 0}
                 </td>
                 <td class="level-cell">
-                    <i class="fas fa-level-up-alt"></i> ${player.level || 1}
+                    <i class="fas fa-level-up-alt"></i>
+                    ${player.level || 1}
                 </td>
-                <td class="car-cell">${getCurrentCarName(player) || 'No Car'}</td>
+                <td class="car-cell">
+                    ${getCurrentCarName(player) || 'No Car'}
+                </td>
                 <td class="value-cell">
-                    <i class="fas fa-coins"></i> $${(player.garageValue || 0).toLocaleString()}
+                    <i class="fas fa-coins"></i>
+                    $${(player.gold || 0).toLocaleString()}
+                </td>
+                <td class="actions-cell">
+                    ${!isCurrentUser ? `
+                        <button class="action-btn challenge-btn" 
+                                onclick="challengePlayer('${player.id}', '${player.username || 'Unknown Player'}', ${player.level || 1})"
+                                title="Challenge to a race">
+                            🏁 Challenge
+                        </button>
+                    ` : '<span class="self-text">-</span>'}
                 </td>
             </tr>
         `;
@@ -1285,6 +1798,12 @@ async function showTrainingModal(trackId) {
 }
 
 async function startTrainingSession() {
+    // REST CHECK - Fixed syntax
+    if (window.restSystem?.isResting) {
+        alert('Cannot train while resting!');
+        return false;
+    } // <-- This was missing!
+
     if (!selectedTrack) return;
     const user = auth.currentUser;
     if (!user) return;
@@ -1528,6 +2047,7 @@ function updateUpgradeButtons() {
 }
 
 // ========== ENHANCED INVENTORY DISPLAY ==========
+// FIXED: Enhanced inventory display with proper image handling
 function displayInventory(items) {
     const inventoryGrid = document.getElementById('inventory-grid');
     const inventoryCount = document.getElementById('inventory-count');
@@ -1546,47 +2066,67 @@ function displayInventory(items) {
         return;
     }
 
+    // Filter items based on current filter
     let filteredItems = items;
     if (currentInventoryFilter !== 'all') {
         filteredItems = items.filter(item => item.type === currentInventoryFilter);
     }
 
+    // Update count
     if (inventoryCount) {
         inventoryCount.textContent = `${filteredItems.length} item${filteredItems.length !== 1 ? 's' : ''}`;
     }
 
+    // Display filtered items with PROPER image handling
     const inventoryHTML = filteredItems.map(item => {
         const rarity = item.rarity || 'common';
         const isEquipped = item.equipped;
+        
+        // Get image path for the item
         const imagePath = getInventoryImagePath(item);
+        
+        // Simple rarity colors
         const rarityColors = {
-            common: '#888888', uncommon: '#00ff88', rare: '#0077ff',
-            epic: '#a29bfe', legendary: '#feca57'
+            common: '#888888',
+            uncommon: '#00ff88', 
+            rare: '#0077ff',
+            epic: '#a29bfe',
+            legendary: '#feca57'
         };
+        
         const color = rarityColors[rarity] || '#888888';
+        
+        // Calculate stat bonuses
         let statBonusText = '';
         if (item.stats) {
             const bonuses = [];
             Object.entries(item.stats).forEach(([stat, value]) => {
-                if (value > 0) bonuses.push(`+${value} ${stat}`);
+                if (value > 0) {
+                    bonuses.push(`+${value} ${stat}`);
+                }
             });
-            if (bonuses.length > 0) statBonusText = `<div class="item-bonuses">${bonuses.join(', ')}</div>`;
+            if (bonuses.length > 0) {
+                statBonusText = `<div class="item-bonuses">${bonuses.join(', ')}</div>`;
+            }
         }
         
         return `
-            <div class="inventory-item ${isEquipped ? 'equipped' : ''}">
+            <div class="inventory-item ${isEquipped ? 'equipped' : ''}" data-item-id="${item.id}" data-item-type="${item.type}">
                 <div class="item-rarity" style="color: ${color}; border-color: ${color};">
                     ${rarity.toUpperCase()}
                 </div>
                 <div class="item-image-container">
-                    <img src="${imagePath}" alt="${item.name}" class="item-preview-image"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <img src="${imagePath}" 
+                         alt="${item.name}" 
+                         class="item-preview-image"
+                         onerror="handleInventoryImageError(this, '${item.id}', '${item.type}')">
                     <div class="item-fallback-icon" style="display: none;">
                         <i class="${getItemIcon(item.type)}"></i>
                     </div>
                 </div>
                 <div class="item-name">${item.name}</div>
                 <div class="item-type">${formatItemType(item.type)}</div>
+                ${isEquipped ? '<div class="equipped-badge">EQUIPPED</div>' : ''}
                 ${statBonusText}
                 <div class="item-actions">
                     ${isEquipped ? 
@@ -1597,8 +2137,8 @@ function displayInventory(items) {
                             <i class="fas fa-check"></i> Equip
                          </button>`
                     }
-                    <button class="inventory-btn sell-inv-btn" onclick="sellInventoryItem('${item.id}', '${item.type}', '${item.name}')">
-                        <i class="fas fa-coins"></i> Sell
+                    <button class="inventory-btn sell-inv-btn" onclick="sellInventoryItem('${item.id}', '${item.type}', '${item.name}')" ${isEquipped ? 'disabled' : ''}>
+                        <i class="fas fa-coins"></i> ${isEquipped ? 'Equipped' : 'Sell'}
                     </button>
                 </div>
             </div>
@@ -1609,52 +2149,53 @@ function displayInventory(items) {
     updateInventoryFilters();
 }
 
+// NEW: Handle inventory image errors properly
+window.handleInventoryImageError = function(imgElement, itemId, itemType) {
+    console.log(`Inventory image failed: ${imgElement.src}`);
+    
+    const fallbackIcon = imgElement.nextElementSibling;
+    if (fallbackIcon && fallbackIcon.classList.contains('item-fallback-icon')) {
+        imgElement.style.display = 'none';
+        fallbackIcon.style.display = 'flex';
+    }
+    
+    // Try fallback images
+    const fallbacks = [
+        `images/${itemType}s/${itemId}.jpg`,
+        `images/${itemType}s/${itemId.toLowerCase().replace(/ /g, '_')}.jpg`,
+        `images/${itemType}s/${itemId.toLowerCase().replace(/ /g, '-')}.jpg`,
+        `images/cars/${itemId}.jpg`,
+        `images/cars/${itemId.toLowerCase().replace(/ /g, '_')}.jpg`,
+        `images/cars/${itemId.toLowerCase().replace(/ /g, '-')}.jpg`
+    ];
+    
+    tryNextFallback(imgElement, fallbacks, 0);
+};
+
+// FIXED: Inventory image path resolver
 function getInventoryImagePath(item) {
+    // For cars, use the car images directory
+    if (item.type === 'car') {
+        const patterns = [
+            `images/cars/${item.id}.jpg`,
+            `images/cars/${item.id.toLowerCase().replace(/ /g, '_')}.jpg`,
+            `images/cars/${item.id.toLowerCase().replace(/ /g, '-')}.jpg`,
+            `images/cars/default_car.jpg`,
+            'images/cars/rusty_rider.jpg'
+        ];
+        return patterns[0];
+    }
+    
+    // For other item types, use their respective directories
     const patterns = [
         `images/${item.type}s/${item.id}.jpg`,
         `images/${item.type}s/${item.id.toLowerCase().replace(/ /g, '_')}.jpg`,
         `images/${item.type}s/${item.id.toLowerCase().replace(/ /g, '-')}.jpg`,
-        `images/cars/${item.id}.jpg`,
-        `images/cars/${item.id.toLowerCase().replace(/ /g, '_')}.jpg`,
-        `images/cars/${item.id.toLowerCase().replace(/ /g, '-')}.jpg`
+        `images/${item.type}s/default_${item.type}.jpg`,
+        `images/cars/default_car.jpg` // Ultimate fallback
     ];
+    
     return patterns[0];
-}
-
-function updateEquippedItemsDisplay(inventory) {
-    const equippedContainer = document.getElementById('equipped-items');
-    if (!equippedContainer) return;
-    
-    const equippedItems = (inventory || []).filter(item => item.equipped && item.type !== 'car');
-    
-    if (equippedItems.length === 0) {
-        equippedContainer.innerHTML = `
-            <div class="no-equipped-items">
-                <p>No parts equipped</p>
-                <small>Equip items from your inventory</small>
-            </div>
-        `;
-        return;
-    }
-    
-    const equippedHTML = equippedItems.map(item => {
-        const imagePath = getInventoryImagePath(item);
-        return `
-            <div class="equipped-item">
-                <div class="equipped-item-image">
-                    <img src="${imagePath}" alt="${item.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <div class="equipped-item-fallback">
-                        <i class="${getItemIcon(item.type)}"></i>
-                    </div>
-                </div>
-                <div class="equipped-item-info">
-                    <div class="equipped-item-name">${item.name}</div>
-                    <div class="equipped-item-type">${formatItemType(item.type)}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    equippedContainer.innerHTML = equippedHTML;
 }
 
 function formatItemType(type) {
@@ -1854,6 +2395,655 @@ function updateEnhancedStatsDisplay(userData) {
     }
 }
 
+// ========== PVP RACING SYSTEM ==========
+let currentChallenge = null;
+let activeRaces = [];
+
+
+// Challenge another player to a race
+window.challengePlayer = async function(playerId, playerName, playerLevel) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Get current player data
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const userData = userDoc.data();
+    const currentPlayerLevel = userData.level || 1;
+    
+    // Check level difference
+    const levelDiff = Math.abs(currentPlayerLevel - playerLevel);
+    const maxAllowedDiff = 10; // Maximum level difference for normal rewards
+    
+    if (levelDiff > maxAllowedDiff) {
+        if (currentPlayerLevel < playerLevel) {
+            if (!confirm(`⚠️ ${playerName} is ${levelDiff} levels higher than you!\nYou might lose more gold if you lose. Continue?`)) {
+                return;
+            }
+        } else {
+            if (!confirm(`⚠️ ${playerName} is ${levelDiff} levels lower than you!\nYour rewards will be reduced if you win. Continue?`)) {
+                return;
+            }
+        }
+    }
+    
+    // Check if player has enough condition
+    if (userData.condition < 15) {
+        alert("You need at least 15% condition to challenge other players!");
+        return;
+    }
+
+    const betAmount = calculateBetAmount(userData.gold, userData.level, levelDiff);
+    
+    if (confirm(`Challenge ${playerName} to a race?\n\n- Cost: 15% condition\n- Bet: ${betAmount} gold\n- Level difference: ${levelDiff}`)) {
+        try {
+            // Create challenge in Firestore
+            const challengeRef = await addDoc(collection(db, "challenges"), {
+                challengerId: user.uid,
+                challengerName: userData.username,
+                challengerLevel: currentPlayerLevel,
+                targetId: playerId,
+                targetName: playerName,
+                targetLevel: playerLevel,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+                conditionCost: 15,
+                betAmount: betAmount,
+                track: getRandomTrack(),
+                levelDifference: levelDiff,
+                expiresAt: new Date(Date.now() + 30 * 60000) // 30 minutes expiry
+            });
+
+            alert(`🎯 Challenge sent to ${playerName}!\nBet: ${betAmount} gold\nThey have 30 minutes to accept.`);
+            
+        } catch (error) {
+            alert('Error sending challenge: ' + error.message);
+        }
+    }
+};
+
+// Calculate bet amount based on player gold and level difference
+function calculateBetAmount(playerGold, playerLevel, levelDiff) {
+    const baseBet = Math.min(50, Math.floor(playerGold * 0.1)); // 10% of gold or 50 max
+    const levelPenalty = Math.max(0.1, 1 - (levelDiff * 0.05)); // 5% reduction per level difference
+    
+    let betAmount = Math.floor(baseBet * levelPenalty);
+    
+    // Ensure minimum bet
+    betAmount = Math.max(10, betAmount);
+    
+    // Ensure bet doesn't exceed player's gold
+    betAmount = Math.min(betAmount, playerGold);
+    
+    return betAmount;
+}
+
+// Accept a challenge
+window.acceptChallenge = async function(challengeId) {
+
+     // REST CHECK - Add this line to the very top
+    if (window.restSystem?.isResting) {
+        alert('Cannot accept challenges while resting!');
+        return false;
+    }
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const challengeDoc = await getDoc(doc(db, "challenges", challengeId));
+        if (!challengeDoc.exists()) {
+            alert('Challenge not found!');
+            return;
+        }
+
+        const challenge = challengeDoc.data();
+        
+        // Check if challenge is for current user
+        if (challenge.targetId !== user.uid) {
+            alert('This challenge is not for you!');
+            return;
+        }
+
+        // Check if challenge expired
+        if (new Date() > challenge.expiresAt.toDate()) {
+            alert('This challenge has expired!');
+            return;
+        }
+
+        // Check condition for both players
+        const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
+        const targetDoc = await getDoc(doc(db, "users", user.uid));
+        
+        const challengerData = challengerDoc.data();
+        const targetData = targetDoc.data();
+
+        if (challengerData.condition < challenge.conditionCost) {
+            alert('Challenger does not have enough condition!');
+            return;
+        }
+
+        if (targetData.condition < challenge.conditionCost) {
+            alert('You do not have enough condition!');
+            return;
+        }
+
+        // Check if players have enough gold for the bet
+        if (challengerData.gold < challenge.betAmount) {
+            alert('Challenger does not have enough gold for the bet!');
+            return;
+        }
+
+        if (targetData.gold < challenge.betAmount) {
+            alert('You do not have enough gold for the bet!');
+            return;
+        }
+
+        if (confirm(`Accept race challenge from ${challenge.challengerName}?\n\n- Bet: ${challenge.betAmount} gold\n- Level difference: ${challenge.levelDifference}`)) {
+            // Start the race
+            await updateDoc(doc(db, "challenges", challengeId), {
+                status: 'accepted',
+                acceptedAt: serverTimestamp()
+            });
+
+            // Start the race simulation
+            startPVPRace(challengeId, challenge);
+        }
+    } catch (error) {
+        alert('Error accepting challenge: ' + error.message);
+    }
+};
+
+// Simulate PVP race with enhanced rewards
+async function startPVPRace(challengeId, challenge) {
+      if (window.restSystem?.isResting) {
+        alert('Cannot race while resting!');
+        return false;
+    }
+    const user = auth.currentUser;
+    
+    try {
+        // Get both players' data
+        const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
+        const targetDoc = await getDoc(doc(db, "users", challenge.targetId));
+        
+        const challengerData = challengerDoc.data();
+        const targetData = targetDoc.data();
+
+        // Calculate race results based on stats, equipment, and level difference
+        const challengerTime = calculateRaceTime(challengerData, challenge.track, challenge.levelDifference);
+        const targetTime = calculateRaceTime(targetData, challenge.track, -challenge.levelDifference); // Negative for target
+
+        const winnerId = challengerTime < targetTime ? challenge.challengerId : challenge.targetId;
+        const loserId = challengerTime < targetTime ? challenge.targetId : challenge.challengerId;
+        const winnerName = challengerTime < targetTime ? challenge.challengerName : challenge.targetName;
+        const loserName = challengerTime < targetTime ? challenge.targetName : challenge.challengerName;
+        const isDraw = Math.abs(challengerTime - targetTime) < 2; // Within 2 seconds is a draw
+
+        // Calculate rewards based on level difference
+        const rewards = calculatePVPRewards(
+            challenge.betAmount, 
+            challenge.levelDifference, 
+            winnerId === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel,
+            loserId === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel
+        );
+
+        // Update challenge with results
+        await updateDoc(doc(db, "challenges", challengeId), {
+            status: 'completed',
+            completedAt: serverTimestamp(),
+            challengerTime: challengerTime,
+            targetTime: targetTime,
+            winnerId: isDraw ? null : winnerId,
+            winnerName: isDraw ? null : winnerName,
+            loserId: isDraw ? null : loserId,
+            isDraw: isDraw,
+            betAmount: challenge.betAmount,
+            goldTransfer: isDraw ? 0 : rewards.goldTransfer,
+            xpReward: rewards.xpReward,
+            fameTransfer: isDraw ? 0 : rewards.fameTransfer
+        });
+
+        // Process rewards and penalties
+        if (isDraw) {
+            // Draw - no gold/fame transfer, both get XP
+            await updateDoc(doc(db, "users", challenge.challengerId), {
+                condition: challengerData.condition - challenge.conditionCost,
+                gold: challengerData.gold, // No change
+                fame: challengerData.fame  // No change
+            });
+
+            await updateDoc(doc(db, "users", challenge.targetId), {
+                condition: targetData.condition - challenge.conditionCost,
+                gold: targetData.gold, // No change
+                fame: targetData.fame  // No change
+            });
+
+            // Both get XP
+            await addXP(challenge.challengerId, rewards.xpReward);
+            await addXP(challenge.targetId, rewards.xpReward);
+
+        } else {
+            // Winner takes gold and fame from loser
+            await updateDoc(doc(db, "users", winnerId), {
+                condition: winnerId === challenge.challengerId ? 
+                    challengerData.condition - challenge.conditionCost : 
+                    targetData.condition - challenge.conditionCost,
+                gold: winnerId === challenge.challengerId ? 
+                    challengerData.gold + rewards.goldTransfer : 
+                    targetData.gold + rewards.goldTransfer,
+                fame: winnerId === challenge.challengerId ? 
+                    challengerData.fame + rewards.fameTransfer : 
+                    targetData.fame + rewards.fameTransfer
+            });
+
+            await updateDoc(doc(db, "users", loserId), {
+                condition: loserId === challenge.challengerId ? 
+                    challengerData.condition - challenge.conditionCost : 
+                    targetData.condition - challenge.conditionCost,
+                gold: loserId === challenge.challengerId ? 
+                    challengerData.gold - challenge.betAmount : 
+                    targetData.gold - challenge.betAmount,
+                fame: loserId === challenge.challengerId ? 
+                    Math.max(0, challengerData.fame - rewards.fameTransfer) : 
+                    Math.max(0, targetData.fame - rewards.fameTransfer)
+            });
+
+            // Winner gets XP, loser gets reduced XP
+            await addXP(winnerId, rewards.xpReward);
+            await addXP(loserId, Math.floor(rewards.xpReward * 0.3)); // Loser gets 30% XP
+        }
+
+        // Show race results
+        showRaceResults(challenge, challengerTime, targetTime, winnerName, loserName, isDraw, rewards);
+
+        // Refresh player data
+        if (user.uid === challenge.challengerId || user.uid === challenge.targetId) {
+            await loadPlayerData(user.uid);
+        }
+
+    } catch (error) {
+        console.error('Error in PVP race:', error);
+        alert('Error processing race: ' + error.message);
+    }
+}
+
+// Calculate race time with level difference consideration
+function calculateRaceTime(playerData, track, levelDifference) {
+    const stats = playerData.stats || {};
+    const equipment = calculateTotalStats(stats, playerData.inventory);
+    
+    // Base time based on track difficulty
+    let baseTime = 120; // 2 minutes base
+    
+    // Apply stat modifiers
+    let timeModifier = 1.0;
+    timeModifier -= (equipment.total.speed || 0) * 0.02;
+    timeModifier -= (equipment.total.handling || 0) * 0.015;
+    timeModifier -= (equipment.total.power || 0) * 0.01;
+    
+    // Level difference penalty/boost (max ±20% effect)
+    const levelEffect = Math.max(-0.2, Math.min(0.2, levelDifference * 0.02));
+    timeModifier *= (1 + levelEffect);
+    
+    // Add some randomness
+    timeModifier *= (0.85 + Math.random() * 0.3);
+    
+    return Math.max(30, baseTime * timeModifier); // Minimum 30 seconds
+}
+
+// Calculate PVP rewards based on level difference
+function calculatePVPRewards(betAmount, levelDifference, winnerLevel, loserLevel) {
+    const baseXP = 25;
+    const baseFame = 5;
+    
+    // Calculate level-based reward multiplier
+    let rewardMultiplier = 1.0;
+    
+    if (levelDifference > 0) {
+        // Higher level player beating lower level player - reduced rewards
+        rewardMultiplier = Math.max(0.1, 1 - (levelDifference * 0.1));
+    } else if (levelDifference < 0) {
+        // Lower level player beating higher level player - bonus rewards
+        rewardMultiplier = Math.min(2.0, 1 + (Math.abs(levelDifference) * 0.15));
+    }
+    
+    return {
+        goldTransfer: Math.floor(betAmount * rewardMultiplier),
+        xpReward: Math.floor(baseXP * rewardMultiplier),
+        fameTransfer: Math.floor(baseFame * rewardMultiplier),
+        rewardMultiplier: rewardMultiplier
+    };
+}
+
+function showRaceResults(challenge, time1, time2, winnerName, loserName, isDraw, rewards) {
+    const levelDiffText = challenge.levelDifference === 0 ? 
+        "Same level" : 
+        `Level difference: ${challenge.levelDifference}`;
+    
+    const rewardInfo = isDraw ? 
+        "🤝 Draw - No gold/fame transfer" :
+        `💰 ${winnerName} won ${rewards.goldTransfer} gold from ${loserName}`;
+
+    const resultHTML = `
+        <div class="race-results">
+            <h3>🏁 Race Results</h3>
+            <div class="race-track">Track: ${challenge.track.name}</div>
+            <div class="race-level-info">${levelDiffText}</div>
+            <div class="race-times">
+                <div class="racer-time">
+                    <span>${challenge.challengerName}</span>
+                    <span>${formatTime(time1)}</span>
+                </div>
+                <div class="racer-time">
+                    <span>${challenge.targetName}</span>
+                    <span>${formatTime(time2)}</span>
+                </div>
+            </div>
+            <div class="race-outcome">
+                ${isDraw ? "🤝 It's a draw!" : `🎉 Winner: ${winnerName}!`}
+            </div>
+            <div class="race-rewards">
+                <div>${rewardInfo}</div>
+                <div>⭐ ${rewards.xpReward} XP for winner</div>
+                <div>🏆 ${rewards.fameTransfer} Fame transferred</div>
+                <div>❤️ -15% Condition for both</div>
+                ${rewards.rewardMultiplier !== 1 ? `<div>📊 Reward multiplier: ${rewards.rewardMultiplier.toFixed(2)}x</div>` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Create modal for results
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        border: 2px solid #00ffff;
+        border-radius: 15px;
+        padding: 2rem;
+        color: white;
+        z-index: 10000;
+        min-width: 400px;
+        box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    `;
+    modal.innerHTML = resultHTML;
+    
+    document.body.appendChild(modal);
+    
+    // Close on click
+    setTimeout(() => {
+        modal.addEventListener('click', () => modal.remove());
+    }, 3000);
+    
+    // Auto-close after 10 seconds
+    setTimeout(() => {
+        if (modal.parentNode) modal.remove();
+    }, 10000);
+}
+
+function getRandomTrack() {
+    const tracks = [
+        { name: "City Sprint", difficulty: "medium", distance: 5 },
+        { name: "Mountain Pass", difficulty: "hard", distance: 8 },
+        { name: "Desert Highway", difficulty: "easy", distance: 3 },
+        { name: "Coastal Run", difficulty: "medium", distance: 6 },
+        { name: "Neon Circuit", difficulty: "hard", distance: 7 }
+    ];
+    return tracks[Math.floor(Math.random() * tracks.length)];
+}
+
+// Accept a challenge
+window.acceptChallenge = async function(challengeId) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const challengeDoc = await getDoc(doc(db, "challenges", challengeId));
+        if (!challengeDoc.exists()) {
+            alert('Challenge not found!');
+            return;
+        }
+
+        const challenge = challengeDoc.data();
+        
+        // Check if challenge is for current user
+        if (challenge.targetId !== user.uid) {
+            alert('This challenge is not for you!');
+            return;
+        }
+
+        // Check condition for both players
+        const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
+        const targetDoc = await getDoc(doc(db, "users", user.uid));
+        
+        const challengerData = challengerDoc.data();
+        const targetData = targetDoc.data();
+
+        if (challengerData.condition < challenge.conditionCost || targetData.condition < challenge.conditionCost) {
+            alert('One of the players does not have enough condition!');
+            return;
+        }
+
+        if (confirm(`Accept race challenge from ${challenge.challengerName}?`)) {
+            // Start the race
+            await updateDoc(doc(db, "challenges", challengeId), {
+                status: 'accepted',
+                acceptedAt: serverTimestamp()
+            });
+
+            // Start the race simulation
+            startPVPRace(challengeId, challenge);
+        }
+    } catch (error) {
+        alert('Error accepting challenge: ' + error.message);
+    }
+};
+
+// ========== DAILY CHALLENGES SYSTEM ==========
+let dailyChallenges = [];
+
+async function loadDailyChallenges() {
+    try {
+        // In a real game, you'd fetch these from Firestore
+        // For now, we'll generate some random challenges
+        dailyChallenges = [
+            {
+                id: 'dc1',
+                title: 'Speed Demon',
+                description: 'Complete 3 training sessions',
+                type: 'training',
+                target: 3,
+                progress: 0,
+                reward: { gold: 50, xp: 25, tokens: 1 },
+                completed: false
+            },
+            {
+                id: 'dc2', 
+                title: 'Gear Collector',
+                description: 'Purchase 2 new items from shop',
+                type: 'purchase',
+                target: 2,
+                progress: 0,
+                reward: { gold: 75, xp: 30, tokens: 2 },
+                completed: false
+            },
+            {
+                id: 'dc3',
+                title: 'Racing Rival',
+                description: 'Win 2 PVP races',
+                type: 'pvp_win',
+                target: 2,
+                progress: 0,
+                reward: { gold: 100, xp: 50, tokens: 3 },
+                completed: false
+            }
+        ];
+        
+        displayDailyChallenges();
+    } catch (error) {
+        console.error('Error loading daily challenges:', error);
+    }
+}
+
+function displayDailyChallenges() {
+    const challengesContainer = document.getElementById('daily-challenges');
+    if (!challengesContainer) return;
+    
+    if (dailyChallenges.length === 0) {
+        challengesContainer.innerHTML = '<div class="no-challenges">No daily challenges available</div>';
+        return;
+    }
+    
+    const challengesHTML = dailyChallenges.map(challenge => `
+        <div class="challenge-item ${challenge.completed ? 'completed' : ''}">
+            <div class="challenge-header">
+                <h4>${challenge.title}</h4>
+                <span class="challenge-progress">${challenge.progress}/${challenge.target}</span>
+            </div>
+            <p class="challenge-desc">${challenge.description}</p>
+            <div class="challenge-rewards">
+                ${challenge.reward.gold ? `<span class="reward-gold">💰 ${challenge.reward.gold}</span>` : ''}
+                ${challenge.reward.xp ? `<span class="reward-xp">⭐ ${challenge.reward.xp}</span>` : ''}
+                ${challenge.reward.tokens ? `<span class="reward-tokens">💎 ${challenge.reward.tokens}</span>` : ''}
+            </div>
+            <button class="challenge-claim-btn" 
+                    onclick="claimChallengeReward('${challenge.id}')"
+                    ${!challenge.completed ? 'disabled' : ''}>
+                ${challenge.completed ? 'Claim Reward' : 'In Progress'}
+            </button>
+        </div>
+    `).join('');
+    
+    challengesContainer.innerHTML = challengesHTML;
+}
+
+window.claimChallengeReward = async function(challengeId) {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const challenge = dailyChallenges.find(c => c.id === challengeId);
+    if (!challenge || !challenge.completed) return;
+    
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const updateData = {
+                gold: userData.gold + challenge.reward.gold,
+                fame: userData.fame + (challenge.reward.fame || 0)
+            };
+            
+            if (challenge.reward.tokens) {
+                updateData.tokens = (userData.tokens || 0) + challenge.reward.tokens;
+            }
+            
+            await updateDoc(userRef, updateData);
+            await addXP(user.uid, challenge.reward.xp);
+            
+            // Mark challenge as claimed
+            challenge.claimed = true;
+            displayDailyChallenges();
+            
+            alert(`🎉 Challenge completed! Rewards claimed!`);
+            await loadPlayerData(user.uid);
+        }
+    } catch (error) {
+        alert('Error claiming reward: ' + error.message);
+    }
+};
+
+// ========== PVP CHALLENGES DISPLAY ==========
+async function loadPVPChallenges() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        // Get pending challenges for current user
+        const challengesQuery = query(
+            collection(db, "challenges"),
+            where("targetId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+        
+        const snapshot = await getDocs(challengesQuery);
+        const challenges = [];
+        
+        snapshot.forEach(doc => {
+            challenges.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+        
+        displayPVPChallenges(challenges);
+    } catch (error) {
+        console.error('Error loading PVP challenges:', error);
+    }
+}
+
+function displayPVPChallenges(challenges) {
+    const challengesContainer = document.getElementById('pvp-challenges');
+    if (!challengesContainer) return;
+    
+    if (challenges.length === 0) {
+        challengesContainer.innerHTML = `
+            <div class="no-challenges">
+                <i class="fas fa-flag-checkered"></i>
+                <p>No pending challenges</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const challengesHTML = challenges.map(challenge => {
+        const timeLeft = Math.max(0, Math.floor((challenge.expiresAt.toDate() - new Date()) / 60000));
+        
+        return `
+            <div class="challenge-item">
+                <div class="challenge-header">
+                    <h4>🏁 Challenge from ${challenge.challengerName}</h4>
+                    <span class="time-left">${timeLeft}m left</span>
+                </div>
+                <div class="challenge-details">
+                    <div>Level: ${challenge.challengerLevel} vs Your: ${challenge.targetLevel || 1}</div>
+                    <div>Bet: ${challenge.betAmount} gold</div>
+                    <div>Condition cost: ${challenge.conditionCost}%</div>
+                </div>
+                <div class="challenge-actions">
+                    <button class="accept-btn" onclick="acceptChallenge('${challenge.id}')">
+                        ✅ Accept
+                    </button>
+                    <button class="decline-btn" onclick="declineChallenge('${challenge.id}')">
+                        ❌ Decline
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    challengesContainer.innerHTML = challengesHTML;
+}
+
+window.declineChallenge = async function(challengeId) {
+    if (confirm('Decline this challenge?')) {
+        try {
+            await updateDoc(doc(db, "challenges", challengeId), {
+                status: 'declined',
+                declinedAt: serverTimestamp()
+            });
+            
+            alert('Challenge declined.');
+            loadPVPChallenges(); // Refresh the list
+        } catch (error) {
+            alert('Error declining challenge: ' + error.message);
+        }
+    }
+};
+
 // ========== APPLICATION INITIALIZATION ==========
 function initializePage() {
     const path = window.location.pathname;
@@ -1862,6 +3052,12 @@ function initializePage() {
     else if (path.includes('rankings.html')) initializeRankings();
     else if (path.includes('training.html')) initializeTraining();
     else if (document.getElementById('inventory-grid')) initializeInventory();
+
+     loadDailyChallenges();
+       loadPVPChallenges();
+    
+    // Refresh challenges every 30 seconds
+    setInterval(loadPVPChallenges, 30000);
 }
 
 function onLoginSuccess(userData) {

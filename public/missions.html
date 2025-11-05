@@ -1,0 +1,41 @@
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Rankings</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Include your Firebase and configuration scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+</head>
+<body>
+    <!-- Navbar will be loaded dynamically -->
+    <div id="navbar-container"></div>
+
+    <!-- Main Content -->
+    <div class="container">
+  
+  <!-- INTERACTIVE PANELS - NEW SECTION -->
+            <div class="interactive-panel">
+                <div class="panel-section">
+                    <h3>🎯 Daily Challenges</h3>
+                    <div id="daily-challenges" class="challenges-grid"></div>
+                </div>
+                <div class="panel-section">
+                    <h3>🏁 PvP Challenges</h3>
+                    <div id="pvp-challenges" class="challenges-list"></div>
+                </div>
+            </div>
+
+        
+                <script type="module" src="frontend.js"></script>
+
+
+
+    <footer>
+        <p>&copy; 2024 Ignition Shift</p>
+    </footer>

@@ -3248,6 +3248,129 @@ input, select, textarea {
     opacity: 0.7;
 }
 
+/*Add to your existing style block:*/
+.equipped-badge {
+    background: linear-gradient(135deg, #00ff88, #00ffff);
+    color: #1a1a2e;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.equipped-item {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9));
+    border: 1px solid rgba(0, 255, 255, 0.4);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 0.8rem;
+    transition: all 0.3s ease;
+}
+
+.equipped-item:hover {
+    border-color: #00ffff;
+    box-shadow: 0 5px 15px rgba(0, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.equipped-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+}
+
+.equipped-item-rarity {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.unequip-small-btn {
+    background: rgba(255, 107, 107, 0.2);
+    border: 1px solid rgba(255, 107, 107, 0.4);
+    color: #ff6b6b;
+    border-radius: 5px;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.unequip-small-btn:hover {
+    background: rgba(255, 107, 107, 0.3);
+    border-color: #ff6b6b;
+}
+
+.equipped-item-image {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+}
+
+.equipped-item-image img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 6px;
+}
+
+.equipped-item-fallback {
+    font-size: 1.5rem;
+    color: #00ffff;
+}
+
+.equipped-item-name {
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.3rem;
+    text-align: center;
+}
+
+.equipped-item-type {
+    font-size: 0.7rem;
+    color: #88ffff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.equipped-stats {
+    font-size: 0.7rem;
+    color: #00ff88;
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+.no-equipped-items {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #88ffff;
+}
+
+.no-equipped-items i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-equipped-items p {
+    margin-bottom: 0.5rem;
+    color: #00ffff;
+}
+
+.no-equipped-items small {
+    opacity: 0.7;
+}
 /* ========== CURRENT VEHICLE DISPLAY ========== */
 .current-vehicle {
     text-align: center;
@@ -3282,4 +3405,559 @@ input, select, textarea {
     font-size: 0.9rem;
 }
 
-/* Keep all your existing inventory CSS, just add the new styles above */
+/* ========== INTERACTIVE PANEL LAYOUT ========== */
+.interactive-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 2rem 0;
+    padding: 0 1rem;
+}
+
+.panel-section {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9));
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 15px;
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
+}
+
+.panel-section h3 {
+    color: #00ffff;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+    padding-bottom: 0.5rem;
+}
+
+/* ========== CHALLENGES SYSTEM ========== */
+.challenges-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.challenges-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.challenge-item {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.8));
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+}
+
+.challenge-item:hover {
+    border-color: #00ffff;
+    box-shadow: 0 5px 15px rgba(0, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.challenge-item.completed {
+    border-color: #00ff88;
+    background: linear-gradient(135deg, rgba(26, 46, 46, 0.8), rgba(22, 62, 62, 0.8));
+}
+
+.challenge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.challenge-header h4 {
+    color: #00ffff;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.time-left {
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.challenge-details {
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+    color: #88ffff;
+}
+
+.challenge-details div {
+    margin-bottom: 0.2rem;
+}
+
+.challenge-progress {
+    background: rgba(0, 255, 255, 0.2);
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+.challenge-rewards {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+    flex-wrap: wrap;
+}
+
+.reward-gold, .reward-xp, .reward-tokens {
+    padding: 0.2rem 0.5rem;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.reward-gold { 
+    background: rgba(255, 215, 0, 0.2); 
+    color: #ffd700;
+}
+.reward-xp { 
+    background: rgba(0, 255, 136, 0.2); 
+    color: #00ff88;
+}
+.reward-tokens { 
+    background: rgba(162, 155, 254, 0.2); 
+    color: #a29bfe;
+}
+
+/* ========== CHALLENGE ACTIONS ========== */
+.challenge-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.accept-btn, .decline-btn, .challenge-claim-btn {
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.accept-btn, .decline-btn {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.accept-btn {
+    background: linear-gradient(135deg, #00ff88, #00cc66);
+    color: #1a1a2e;
+}
+
+.decline-btn {
+    background: linear-gradient(135deg, #ff6b6b, #cc5555);
+    color: white;
+}
+
+.challenge-claim-btn {
+    width: 100%;
+    padding: 0.5rem;
+    background: linear-gradient(135deg, #00ff88, #00ffff);
+    color: #1a1a2e;
+}
+
+.challenge-claim-btn:disabled {
+    background: #888888;
+    cursor: not-allowed;
+    color: #cccccc;
+}
+
+.challenge-claim-btn:not(:disabled):hover,
+.accept-btn:hover, 
+.decline-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== RANKING ACTION BUTTONS ========== */
+.actions-cell {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.challenge-btn, .trade-btn {
+    padding: 0.3rem 0.6rem;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.challenge-btn {
+    background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+    color: white;
+}
+
+.trade-btn {
+    background: linear-gradient(135deg, #feca57, #ffd880);
+    color: #1a1a2e;
+}
+
+.challenge-btn:hover, .trade-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== PVP RACING STYLES ========== */
+.race-results {
+    text-align: center;
+}
+
+.race-times {
+    margin: 1rem 0;
+}
+
+.racer-time {
+    display: flex;
+    justify-content: space-between;
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 5px;
+}
+
+.race-winner {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin: 1rem 0;
+    color: #00ff88;
+}
+
+.race-rewards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* ========== CHAT SYSTEM ========== */
+.chat-container {
+    background: rgba(26, 26, 46, 0.8);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.chat-messages {
+    height: 200px;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.chat-message {
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0;
+}
+
+.chat-player {
+    color: #00ffff;
+    font-weight: bold;
+}
+
+.chat-time {
+    color: #888888;
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+}
+
+.chat-input-container {
+    display: flex;
+    padding: 0.5rem;
+    border-top: 1px solid rgba(0, 255, 255, 0.2);
+}
+
+.chat-input-container input {
+    flex: 1;
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 5px;
+    padding: 0.5rem;
+    color: white;
+}
+
+.chat-input-container button {
+    margin-left: 0.5rem;
+    background: linear-gradient(135deg, #00ff88, #00ffff);
+    border: none;
+    border-radius: 5px;
+    padding: 0.5rem 1rem;
+    color: #1a1a2e;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* ========== UTILITY CLASSES ========== */
+.no-challenges {
+    text-align: center;
+    padding: 2rem;
+    color: #88ffff;
+    font-style: italic;
+}
+
+.no-challenges i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.dashboard-container {
+    margin-top: 0;
+}
+
+.stats-container {
+    margin-top: 2rem;
+}
+
+/* ========== RESPONSIVE DESIGN ========== */
+@media (max-width: 768px) {
+    .interactive-panel {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin: 1rem 0;
+        padding: 0 0.5rem;
+    }
+    
+    .panel-section {
+        padding: 1rem;
+    }
+    
+    .challenge-actions {
+        flex-direction: column;
+    }
+    
+    .challenge-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .time-left {
+        align-self: flex-end;
+    }
+}
+
+/* ========== REST SYSTEM ========== */
+.rest-section {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9));
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 15px;
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
+}
+
+.rest-section h3 {
+    color: #00ffff;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+    padding-bottom: 0.5rem;
+}
+
+.rest-timer {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+
+.rest-time-remaining {
+    font-size: 1.5rem;
+    color: #00ff88;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.rest-progress {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+}
+
+.rest-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff88, #00ffff);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.rest-benefits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.rest-benefit {
+    text-align: center;
+    padding: 0.5rem;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+.rest-benefit-value {
+    font-size: 1.2rem;
+    color: #00ff88;
+    font-weight: bold;
+}
+
+.rest-benefit-label {
+    font-size: 0.8rem;
+    color: #88ffff;
+}
+
+.rest-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.rest-option {
+    padding: 0.8rem 0.5rem;
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.8));
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 8px;
+    color: #88ffff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.rest-option:hover {
+    border-color: #00ffff;
+    transform: translateY(-2px);
+}
+
+.rest-option.selected {
+    border-color: #00ff88;
+    background: linear-gradient(135deg, rgba(26, 46, 46, 0.8), rgba(22, 62, 62, 0.8));
+    color: #00ff88;
+}
+
+.rest-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.rest-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.start-rest-btn, .cancel-rest-btn {
+    flex: 1;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.start-rest-btn {
+    background: linear-gradient(135deg, #00ff88, #00cc66);
+    color: #1a1a2e;
+}
+
+.start-rest-btn:disabled {
+    background: #666666;
+    color: #cccccc;
+    cursor: not-allowed;
+}
+
+.cancel-rest-btn {
+    background: linear-gradient(135deg, #ff6b6b, #cc5555);
+    color: white;
+}
+
+.start-rest-btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 255, 136, 0.3);
+}
+
+.cancel-rest-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+}
+
+.rest-luck-bonus {
+    text-align: center;
+    padding: 0.5rem;
+    background: rgba(162, 155, 254, 0.2);
+    border: 1px solid rgba(162, 155, 254, 0.5);
+    border-radius: 8px;
+    margin: 0.5rem 0;
+}
+
+.rest-luck-bonus .label {
+    color: #a29bfe;
+    font-size: 0.8rem;
+}
+
+.rest-luck-bonus .value {
+    color: #00ff88;
+    font-weight: bold;
+}
+
+/* Resting state restrictions */
+body.resting .training-section,
+body.resting .pvp-section,
+body.resting .challenge-actions .accept-btn,
+body.resting .challenge-actions .decline-btn {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.rest-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #00ff88, #00ffff);
+    color: #1a1a2e;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 255, 255, 0.3);
+    z-index: 1000;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive Design for Rest System */
+@media (max-width: 768px) {
+    .rest-options {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .rest-benefits {
+        grid-template-columns: 1fr;
+    }
+    
+    .rest-actions {
+        flex-direction: column;
+    }
+}

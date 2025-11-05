@@ -80,6 +80,16 @@
                             </th>
                             <th>Current Car</th>
                             <th>Garage Value</th>
+                            <td class="actions-cell">
+    <button class="action-btn challenge-btn" 
+            onclick="challengePlayer('${player.id}', '${player.username || 'Unknown Player'}')">
+        🏁 Challenge
+    </button>
+    <button class="action-btn trade-btn" 
+            onclick="openTrade('${player.id}', '${player.username || 'Unknown Player'}')">
+        🔄 Trade
+    </button>
+</td>
                         </tr>
                     </thead>
                     <tbody id="rankings-tbody">
