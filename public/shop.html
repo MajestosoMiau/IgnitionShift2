@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Shop</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+        <!-- Navigation -->
+<div id="navbar-container"></div>
+    <div class="shop-container">
+
+        <!-- Category Tabs -->
+        <div class="category-tabs">
+            <button class="category-btn active" onclick="showCategory('cars')">🚗 Cars</button>
+            <button class="category-btn" onclick="showCategory('engines')">⚙️ Engines</button>
+            <button class="category-btn" onclick="showCategory('tires')">🌀 Tires</button>
+            <button class="category-btn" onclick="showCategory('seats')">💺 Seats</button>
+            <button class="category-btn" onclick="showCategory('turbos')">💨 Turbos</button>
+            <button class="category-btn" onclick="showCategory('suspensions')">🔧 Suspensions</button>
+        </div>
+
+        <!-- Items List -->
+        <div id="items-list" class="items-list">
+            <div class="loading">Select a category to browse items...</div>
+        </div>
+    </div>
+
+    <script type="module" src="frontend.js"></script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Home</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <div id="navbar-container"></div>
+
+    <div class="container">  
+
+         <!-- PLAYER DASHBOARD (Visible when logged in) -->
+        <div id="player-view" style="display: none;">
+            <!-- Player Header -->
+            <div class="player-header-compact">
+                <div class="player-welcome-compact">
+                    <h1>Welcome back, <span id="username">Racer</span>! 🏎️</h1>
+                    <p>Ready to dominate the track?</p>
+                </div>
+                <div class="quick-stats-header">
+                    <div class="quick-stat">
+                        <i class="fas fa-coins"></i>
+                        <span id="gold">0</span>
+                    </div>
+                    <div class="quick-stat">
+                        <i class="fas fa-gem"></i>
+                        <span id="tokens">0</span>
+                    </div>
+                    <button onclick="logout()" class="logout-btn-compact">Logout</button>
+                </div>
+            </div>
+
+            <!-- Main Dashboard Grid -->
+            <!-- Dashboard Layout -->
+<div class="dashboard-container">
+    <!-- Left Column: Inventory -->
+    <div class="inventory-section">
+        <h3>Inventory</h3>
+        <div class="inventory-controls">
+            <div class="inventory-filters">
+                <button class="filter-btn active" data-filter="all">All Items</button>
+                <button class="filter-btn" data-filter="car">🚗 Cars</button>
+                <button class="filter-btn" data-filter="engine">⚙️ Engines</button>
+                <button class="filter-btn" data-filter="tire">🌀 Tires</button>
+                <button class="filter-btn" data-filter="turbo">⚡ Turbos</button>
+                <button class="filter-btn" data-filter="suspension">🔧 Suspensions</button>
+                <button class="filter-btn" data-filter="seat">💺 Seats</button>
+            </div>
+            
+            <div class="inventory-sort">
+                <label for="sort-inventory">Sort by:</label>
+                <select id="sort-inventory">
+                    <option value="name">Name</option>
+                    <option value="equipped">Equipped First</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="inventory-count" id="inventory-count">Loading...</div>
+        <div id="inventory-grid" class="inventory-grid"></div>
+    </div>
+
+    <!-- Right Column: Current Vehicle & Equipped Items -->
+    <div class="equipment-section">
+        <h3>Current Setup</h3>
+        
+        <div class="current-vehicle">
+            <div class="vehicle-image-container">
+                <img id="current-car-image" src="" alt="Current Vehicle">
+            </div>
+            <div class="vehicle-name" id="current-car-name">Loading...</div>
+            <div class="vehicle-stats" id="current-car-stats">Equipped</div>
+        </div>
+        
+        <div class="equipped-items-container">
+            <h4>Equipped Parts</h4>
+            <div id="equipped-items">
+                <!-- Equipped items will be displayed here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Stats Row -->
+<div class="stats-container">
+    <!-- Left: Attributes -->
+    <div class="attributes-section">
+        <h3>Attributes</h3>
+        <div class="stats-grid">
+            <!-- Your existing attributes display -->
+            <div class="stat-item">
+                <span>💪 Power:</span>
+                <span id="power-display">0</span>
+            </div>
+            <div class="stat-item">
+                <span>⚡ Speed:</span>
+                <span id="speed-display">0</span>
+            </div>
+            <div class="stat-item">
+                <span>🎮 Dexterity:</span>
+                <span id="dexterity-display">0</span>
+            </div>
+            <div class="stat-item">
+                <span>🎯 Handling:</span>
+                <span id="handling-display">0</span>
+            </div>
+            <div class="stat-item">
+                <span>🛡️ Structure:</span>
+                <span id="structure-display">0</span>
+            </div>
+            <div class="stat-item">
+                <span>🍀 Luck:</span>
+                <span id="luck-display">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Player Stats -->
+    <div class="player-stats-section">
+        <h3>Player Stats</h3>
+        <div class="stats-grid">
+            <!-- Your existing player stats display -->
+            <div class="stat-item">
+                <span>⭐ Level:</span>
+                <span id="level">1</span>
+            </div>
+            <div class="stat-item">
+                <span>📊 XP:</span>
+                <span id="xp">0/100</span>
+            </div>
+            <div class="stat-item">
+                <span>💰 Gold:</span>
+                <span id="gold">0</span>
+            </div>
+            <div class="stat-item">
+                <span>💎 Tokens:</span>
+                <span id="tokens">0</span>
+            </div>
+            <div class="stat-item">
+                <span>🏆 Fame:</span>
+                <span id="fame">0</span>
+            </div>
+            <div class="stat-item">
+                <span>❤️ Condition:</span>
+                <span id="condition">100%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+        <!-- AUTH SECTION (Visible when logged out) -->
+        <div class="auth-section" id="auth-section">
+            <div class="auth-container">
+                <h2><i class="fas fa-racing-flag"></i> Start Your Engine</h2>
+                <form id="authForm">
+                    <div class="form-group">
+                        <input type="email" id="email" placeholder="Enter your email" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="password" placeholder="Create your password" required>
+                    </div>
+                    <button type="submit" class="auth-btn">
+                        <i class="fas fa-play"></i> Launch Career
+                    </button>
+                </form>
+                <p id="authMessage"></p>
+                
+                <div class="auth-features">
+                    <p><i class="fas fa-bolt"></i> Instant Access</p>
+                    <p><i class="fas fa-shield-alt"></i> Secure & Private</p>
+                    <p><i class="fas fa-trophy"></i> Start Competing Immediately</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- GALLERY & NEWS (Visible when logged out) -->
+        <div class="guest-content" id="guest-content">
+            <!-- Image Gallery -->
+            <section class="news-gallery">
+                <h2>Latest from the Track</h2>
+                <div class="gallery-grid">
+                    <div class="news-card">
+                        <div class="news-image">
+                            <i class="fas fa-trophy"></i>
+                        </div>
+                        <div class="news-content">
+                            <h3>Championship Update</h3>
+                            <p>New season starts next week with $50,000 prize pool</p>
+                        </div>
+                    </div>
+                    <div class="news-card">
+                        <div class="news-image">
+                            <i class="fas fa-car"></i>
+                        </div>
+                        <div class="news-content">
+                            <h3>New Vehicles Added</h3>
+                            <p>5 hypercars now available in the shop</p>
+                        </div>
+                    </div>
+                    <div class="news-card">
+                        <div class="news-image">
+                            <i class="fas fa-cogs"></i>
+                        </div>
+                        <div class="news-content">
+                            <h3>Major Update Live</h3>
+                            <p>New training system and improved physics</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Stats Preview -->
+            <section class="preview-stats">
+                <h2>Join Thousands of Racers</h2>
+                <div class="quick-stats">
+                    <div class="quick-stat">
+                        <i class="fas fa-users"></i>
+                        <span>15,847</span>
+                        <span>Active Racers</span>
+                    </div>
+                    <div class="quick-stat">
+                        <i class="fas fa-flag-checkered"></i>
+                        <span>284,956</span>
+                        <span>Races Completed</span>
+                    </div>
+                    <div class="quick-stat">
+                        <i class="fas fa-trophy"></i>
+                        <span>$2.1M</span>
+                        <span>In Prizes Won</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+       
+
+    <script type="module" src="frontend.js"></script>
+</body>
+</html>

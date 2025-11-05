@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rest</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="shared.js" defer></script>
+</head>
+<div id="header"></div>
+<script>
+    fetch('header.html')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('header').innerHTML = html;
+        })
+        .catch(error => console.error('Error loading header:', error));
+</script>
+<body>
+    <div id="header-container"></div> <!-- Header dynamically loaded -->   
+
+    <main>
+        <h1>Rest and Recover</h1>
+        <p>Select the number of hours you want to rest:</p>
+
+        <select id="rest-hours">
+            <!-- Dynamically generated options -->
+        </select>
+
+        <button id="rest-button">Start Rest</button>
+
+        <div id="rest-results" style="margin-top: 20px;">
+            <p id="rest-output"></p>
+        </div>
+    </main>
+
+    <script>
+        // Load shared header and sidebar
+        loadHeader();
+        loadSidebar();
+
+        // Populate dropdown with rest hours
+        const restDropdown = document.getElementById('rest-hours');
+        for (let i = 1; i <= 8; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `${i} Hour${i > 1 ? 's' : ''}`;
+            restDropdown.appendChild(option);
+        }
+
+        // Rest logic
+document.getElementById('rest-button').addEventListener('click', async () => {
+    const hours = parseInt(restDropdown.value, 10);
+    const playerData = await fetchPlayerData(); // Fetch player data from Firestore
+    const level = playerData.level;
+
+    // Revised rewards calculation
+    const goldReward = hours * (10 + level * 10); // Scaled gold reward
+    const xpReward = hours * (5 + level * 5);    // Scaled XP reward
+
+    // Update player data in Firestore
+    await updatePlayerData({
+        gold: playerData.gold + goldReward,
+        xp: playerData.xp + xpReward,
+    });
+
+    // Display results
+    const output = document.getElementById('rest-output');
+    output.textContent = `You rested for ${hours} hour${hours > 1 ? 's' : ''} and gained ${goldReward} gold and ${xpReward} XP.`;
+});
+
+    </script>
+</body>
+</html>

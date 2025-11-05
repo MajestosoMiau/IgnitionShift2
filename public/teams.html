@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teams - Cyber Garage</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <div class="container">
+        <!-- Player Team Status Card -->
+        <div id="player-team-status" class="card" style="display: none;">
+            <div class="card-header">
+                <h3><i class="fas fa-users"></i> Your Team</h3>
+                <span id="team-actions"></span>
+            </div>
+            <div id="team-info-content">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Main Teams Interface -->
+        <div id="teams-interface" class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-people-group"></i> Teams</h3>
+            </div>
+            
+            <!-- Team Selection Tabs -->
+            <div class="team-tabs">
+                <button class="team-tab-btn active" data-tab="search">
+                    <i class="fas fa-search"></i> Search Teams
+                </button>
+                <button class="team-tab-btn" data-tab="create">
+                    <i class="fas fa-plus"></i> Create Team
+                </button>
+                <button class="team-tab-btn" data-tab="requests" id="requests-tab" style="display: none;">
+                    <i class="fas fa-user-clock"></i> Join Requests
+                    <span id="requests-badge" class="notification-badge" style="display: none;">0</span>
+                </button>
+                <button class="team-tab-btn" data-tab="my-team" id="my-team-tab" style="display: none;">
+                    <i class="fas fa-users"></i> My Team
+                </button>
+            </div>
+
+            <!-- Search Teams Tab -->
+            <div id="search-tab" class="team-tab-content active">
+                <div class="search-controls">
+                    <div class="search-box">
+                        <input type="text" id="team-search" placeholder="Search teams by name or tag...">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="filter-controls">
+                        <select id="sort-teams">
+                            <option value="rating">Best Rating</option>
+                            <option value="fame">Most Fame</option>
+                            <option value="level">Highest Level</option>
+                            <option value="members">Most Members</option>
+                            <option value="newest">Newest</option>
+                        </select>
+                        <select id="join-type-filter">
+                            <option value="all">All Teams</option>
+                            <option value="open">Open Join</option>
+                            <option value="approval">Approval Required</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="teams-list" class="teams-list">
+                    <!-- Teams will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Create Team Tab -->
+            <div id="create-tab" class="team-tab-content">
+                <div class="create-team-form">
+                    <div class="form-group">
+                        <label for="team-name">Team Name</label>
+                        <input type="text" id="team-name" placeholder="Enter team name" maxlength="20">
+                        <div class="char-counter"><span id="name-chars">0</span>/20</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="team-tag">Team Tag</label>
+                        <input type="text" id="team-tag" placeholder="4-letter tag" maxlength="4" style="text-transform: uppercase;">
+                        <div class="char-counter"><span id="tag-chars">0</span>/4</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="team-description">Description</label>
+                        <textarea id="team-description" placeholder="Describe your team..." maxlength="100"></textarea>
+                        <div class="char-counter"><span id="desc-chars">0</span>/100</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="join-type">Join Type</label>
+                        <select id="join-type">
+                            <option value="open">Open - Anyone can join</option>
+                            <option value="approval">Approval Required</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="min-level">Minimum Level Requirement</label>
+                        <input type="number" id="min-level" min="1" max="50" value="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="min-fame">Minimum Fame Requirement</label>
+                        <input type="number" id="min-fame" min="0" value="0">
+                    </div>
+                    
+                    <div class="create-cost">
+                        <div class="cost-item">
+                            <i class="fas fa-gem" style="color: #a29bfe;"></i>
+                            <span>Creation Cost: 250 Ignition Tokens</span>
+                        </div>
+                        <div id="diamond-balance" class="balance">Your Tokens: 0</div>
+                    </div>
+                    
+                    <button id="create-team-btn" class="create-btn" disabled>
+                        <i class="fas fa-plus"></i> Create Team for 250 Ignition Tokens
+                    </button>
+                </div>
+            </div>
+
+            <!-- Join Requests Tab (for team leaders) -->
+            <div id="requests-tab-content" class="team-tab-content">
+                <div id="join-requests-list">
+                    <!-- Join requests will be loaded here -->
+                </div>
+            </div>
+
+            <!-- My Team Tab -->
+            <div id="my-team-tab-content" class="team-tab-content">
+                <div id="team-management">
+                    <!-- Team management interface will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Creation Modal -->
+    <div id="create-team-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Team Creation</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="team-confirmation-details"></div>
+                <div class="modal-actions">
+                    <button id="confirm-create-team" class="modal-btn primary-btn">
+                        <i class="fas fa-check"></i> Create Team (250 Ignition Tokens)
+                    </button>
+                    <button class="modal-btn secondary-btn cancel-create">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Request Modal -->
+    <div id="join-request-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Request to Join Team</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="team-join-details"></div>
+                <div class="form-group">
+                    <label for="join-message">Message to Team Leader (optional)</label>
+                    <textarea id="join-message" placeholder="Introduce yourself..." maxlength="200"></textarea>
+                    <div class="char-counter"><span id="message-chars">0</span>/200</div>
+                </div>
+                <div class="modal-actions">
+                    <button id="confirm-join-request" class="modal-btn primary-btn">
+                        <i class="fas fa-paper-plane"></i> Send Join Request
+                    </button>
+                    <button class="modal-btn secondary-btn cancel-join">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="frontend.js"></script>
+    <script>
+        // Character counters
+        document.getElementById('team-name')?.addEventListener('input', function() {
+            document.getElementById('name-chars').textContent = this.value.length;
+        });
+        
+        document.getElementById('team-tag')?.addEventListener('input', function() {
+            document.getElementById('tag-chars').textContent = this.value.length;
+            this.value = this.value.toUpperCase();
+        });
+        
+        document.getElementById('team-description')?.addEventListener('input', function() {
+            document.getElementById('desc-chars').textContent = this.value.length;
+        });
+        
+        document.getElementById('join-message')?.addEventListener('input', function() {
+            document.getElementById('message-chars').textContent = this.value.length;
+        });
+
+        // Tab switching
+        document.querySelectorAll('.team-tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tab = this.dataset.tab;
+                
+                // Update active tab
+                document.querySelectorAll('.team-tab-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show corresponding content
+                document.querySelectorAll('.team-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(tab + '-tab').classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
+
+    <footer>
+        <p>&copy; 2024 Ignition Shift</p>
+    </footer>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Rankings</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Include your Firebase and configuration scripts -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+</head>
+<body>
+    <!-- Navbar will be loaded dynamically -->
+    <div id="navbar-container"></div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="header-content">
+                <h1><i class="fas fa-trophy"></i> Player Rankings</h1>
+                <p>Compete with other players and climb to the top!</p>
+            </div>
+            <div class="quick-stats">
+                <div class="quick-stat">
+                    <i class="fas fa-medal"></i>
+                    <span id="player-rank">Loading...</span>
+                </div>
+                <div class="quick-stat">
+                    <i class="fas fa-star"></i>
+                    <span id="player-fame">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rankings Controls -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-sliders-h"></i> Rankings Filter</h3>
+            </div>
+            <div class="rankings-controls">
+                <div class="sort-controls">
+                    <label>Sort By:</label>
+                    <select id="sort-by" class="sort-select">
+                        <option value="fame">Fame Points</option>
+                        <option value="level">Player Level</option>
+                    </select>
+                </div>
+                <div class="pagination-controls">
+                    <button id="prev-page" class="pagination-btn" disabled>
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </button>
+                    <span id="page-info" class="page-info">1-50</span>
+                    <button id="next-page" class="pagination-btn">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rankings Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-list-ol"></i> Leaderboard</h3>
+            </div>
+            <div class="rankings-table-container">
+                <table class="rankings-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th class="sortable" data-sort="fame">
+                                Fame Points <i class="fas fa-sort"></i>
+                            </th>
+                            <th class="sortable" data-sort="level">
+                                Level <i class="fas fa-sort"></i>
+                            </th>
+                            <th>Current Car</th>
+                            <th>Garage Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankings-tbody">
+                        <!-- Rankings will be populated dynamically -->
+                        <tr>
+                            <td colspan="6" class="loading-row">
+                                <i class="fas fa-spinner fa-spin"></i> Loading rankings...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Player Rank Highlight Card -->
+        <div class="card" id="player-highlight" style="display: none;">
+            <div class="card-header">
+                <h3><i class="fas fa-user"></i> Your Position</h3>
+            </div>
+            <div class="player-highlight-content">
+                <!-- Player highlight will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+        <script type="module" src="frontend.js"></script>
+
+
+
+    <footer>
+        <p>&copy; 2024 Ignition Shift</p>
+    </footer>

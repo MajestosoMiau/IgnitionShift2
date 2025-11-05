@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift</title>
+    <link rel="stylesheet" href="styles.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<!-- Link to your CSS file -->
+</head>
+<body>
+    <div class="navbar">
+        <ul>
+            <li><a href="#" onclick="navigateTo('home');">Home</a></li>
+            <li><a href="#" onclick="navigateTo('overview');">Overview</a></li>
+            <li><a href="#" onclick="navigateTo('garage');">Garage</a></li>
+            <li><a href="#" onclick="navigateTo('messages')">Messages</a></li>
+            <li><a href="#" onclick="navigateTo('shop');">Shop</a></li>
+            <li><a href="#" onclick="navigateTo('training');">Training</a></li>
+            <li><a href="#" onclick="navigateTo('market')">Market</a></li>
+            <li><a href="#" onclick="navigateTo('teams');">Teams</a></li>
+            <li><a href="#" onclick="navigateTo('rest');">Rest</a></li>
+            <li><a href="#" onclick="navigateTo('rankings');">Rankings</a></li>
+        </ul>
+    </div>
+
+    <div id="messages" style="display: none;">
+        <h2>Inbox</h2>
+        <div id="messageContainer"></div>
+    </div>
+    
+    <div id="signup">
+        <h2>Sign Up</h2>
+        <input type="text" id="signup-username" placeholder="Username">
+        <input type="email" id="signup-email" placeholder="Email">
+        <input type="password" id="signup-password" placeholder="Password">
+        <button onclick="signup()">Sign Up</button>
+      </div>
+
+      <div id="login">
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Username">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+      </div>
+      
+    
+    <div id="player-stats"></div>
+    <div id="content"></div>
+    <div id="rest" style="display: none;"></div>
+
+    
+
+    <div id="overview" class="section">
+        <h1>Player Overview</h1>
+        <!-- Car Display -->
+        <div id="carDisplay">
+            <h2>Car:</h2>
+            <img id="carImage" src="default-car.jpg" alt="Player's Car" style="width: 300px; height: auto;" />
+            <p id="carDetails">Car model and stats will be displayed here.</p>
+        </div>
+
+        <!-- Inventory Display -->
+        <div id="inventoryDisplay">
+            <h2>Inventory:</h2>
+            <div id="inventoryItems">
+                <!-- Inventory items will be displayed here -->
+            </div>
+        </div>
+
+        <!-- Player Stats Display -->
+        <div id="playerStats">
+            <h2>Player Stats:</h2>
+            <p id="playerLevel">Level: [Player's level]</p>
+            <p id="playerXP">XP: [Player's XP]</p>
+            <p id="playerGold">Gold: [Player's Gold]</p>
+            <p id="playerDiamonds">Diamonds: [Player's Diamonds]</p>
+        </div>
+
+        <div id="training-section" style="display: none;">
+        <h2>Training</h2>
+        <p>Enter the number of minutes you want to train (1-10):</p>
+        <input type="number" id="training-minutes" min="1" max="10" value="1">
+        <button id="train-button" onclick="simulateTraining();">Train</button>
+    </div>
+
+    <div id="shopkeeper-dialogue" style="position: absolute; right: 20px; top: 20px; background-color: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 5px; display: none;">
+        <p id="dialogue-text"></p>
+    </div>
+
+    <div id="shopItems">
+        <!-- Existing shop items will be displayed here -->
+    </div>
+
+    <div id="shop" style="display:none;">
+        <h1>Shop</h1>
+        <button onclick="displayCars()">Cars</button>
+        <button onclick="displayEngineItems()">Other Items</button>
+        <button onclick="navigateTo('vipStore')">VIP Store</button>
+    
+        <div id="carContainer" style="display: block;">
+            <!-- Each car now occupies its own row -->
+            <div class="car-item">
+                <div id="carsSection" class="shop-section">
+                    <!-- Car content goes here -->
+                  
+                </div>
+            </div>            
+            <!-- Add more car items as needed -->
+        </div>
+    </div>
+
+    <div id="itemContainer" style="display: none;"></div>
+    <div id="engineContainer" style="display: none;"></div>
+
+    <div id="market" style="display:none;">
+        <h1>Market</h1>
+        <h2>Your Items for Sale</h2>
+        <div id="items-for-sale"></div>
+        <h2>Sell an Item</h2>
+        <select id="item-select"></select>
+        <input type="number" id="sell-price" placeholder="Enter Sell Price" />
+        <button onclick="sellToMarket()">Sell</button>
+        <h2>Available Items for Purchase</h2>
+        <div id="market-items"></div>
+    </div>
+
+    <div id="rankings" style="display: none;">
+        <h2>Rankings</h2>
+        <p>Here are the top players!</p>
+    </div>
+
+    <div id="vipStoreContainer" style="display: none;">
+        <h2>VIP Store</h2>
+        <p>Purchase diamonds here:</p>
+        
+        <div class="packages">
+            <div class="package">
+                <h3>100 Diamonds</h3>
+                <p>$1.99</p>
+                <button class="buy-btn" data-package="100">Buy Now</button>
+            </div>
+            <div class="package">
+                <h3>500 Diamonds</h3>
+                <p>$7.99</p>
+                <button class="buy-btn" data-package="500">Buy Now</button>
+            </div>
+            <div class="package">
+                <h3>1000 Diamonds</h3>
+                <p>$14.99</p>
+                <button class="buy-btn" data-package="1000">Buy Now</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="toggleChat">Open Chat</button>
+    <div id="chatContainer">
+        <div id="chatMessages"></div>
+        <input type="text" id="chatInput" placeholder="Type your message..." />
+        <button id="sendMessageButton">Send</button>
+    </div>
+
+    <div id="custom-alert" style="display: none; position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 5px; text-align: center; width: auto;">
+        <span id="alert-message"></span>
+    </div>
+
+    <!-- Add this in your HTML file (before your main script tag): -->
+     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js"></script>
+     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth.js"></script>
+     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore.js"></script>
+    <script src="frontend.js"></script>    
+    <script src="game.js"></script> <!-- Ensure this is at the bottom -->
+</body>
+</html>

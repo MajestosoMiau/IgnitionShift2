@@ -1,0 +1,51 @@
+<!-- navbar.html -->
+  <body>
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="nav-logo">
+            <button class="nav-toggle" id="navToggle">
+    <i class="fas fa-bars"></i>
+</button>
+            <i class="fas fa-racing-car"></i>
+            <span>Ignition Shift</span>
+        </div>
+        <div class="nav-menu">
+            <a href="index.html" class="nav-link" id="nav-home">
+                <i class="fas fa-home"></i> Home
+            </a>
+            <a href="garage.html" class="nav-link" id="nav-garage">
+                <i class="fas fa-warehouse"></i> Garage
+            </a>
+            <a href="shop.html" class="nav-link" id="nav-shop">
+                <i class="fas fa-shopping-cart"></i> Shop
+            </a>
+            <a href="race.html" class="nav-link" id="nav-race">
+                <i class="fas fa-flag-checkered"></i> Race
+            </a>
+            <a href="training.html" class="nav-link" id="nav-training">
+                <i class="fas fa-dumbbell"></i> Training
+            </a>
+            <a href="teams.html" class="nav-link" id="nav-teams">
+                <i class="fa-solid fa-people-group"></i> Teams
+            </a>
+            <a href="marketplace.html" class="nav-link" id="nav-marketplace">
+                <i class="fas fa-shop"></i> Marketplace
+            </a>
+            <a href="rankings.html" class="nav-link" id="nav-rankings">
+                <i class="fas fa-trophy"></i> Rankings
+            </a>
+        </div>
+        <div class="nav-user" id="nav-user" style="display: none;">
+            <span id="player-name-nav">Racer</span>
+            <button onclick="logout()" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+        <div class="nav-guest" id="nav-guest">
+            <a href="index.html" class="auth-nav-btn">Login</a>
+        </div>
+    </div>
+</nav>
+
+ <script type="module" src="frontend.js"></script>
+ </body>

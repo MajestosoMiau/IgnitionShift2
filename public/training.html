@@ -1,0 +1,107 @@
+
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training - Cyber Garage</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="navbar-container"></div>
+
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="header-content">
+                <h1><i class="fas fa-dumbbell"></i> Training Center</h1>
+                <p>Improve your skills and earn rewards on various tracks</p>
+            </div>
+            <div class="quick-stats">
+                <div class="quick-stat">
+                    <i class="fas fa-heart"></i>
+                    <span id="training-condition">100</span>
+                </div>
+                <div class="quick-stat">
+                    <i class="fas fa-clock"></i>
+                    <span id="active-cooldowns">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Difficulty Selection -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-signal"></i> Select Difficulty</h3>
+            </div>
+            <div class="difficulty-tabs">
+                <button class="difficulty-btn active" data-difficulty="beginner">
+                    <i class="fas fa-flag"></i> Beginner
+                </button>
+                <button class="difficulty-btn" data-difficulty="intermediate">
+                    <i class="fas fa-flag-checkered"></i> Intermediate
+                </button>
+                <button class="difficulty-btn" data-difficulty="advanced">
+                    <i class="fas fa-fire"></i> Advanced
+                </button>
+                <button class="difficulty-btn" data-difficulty="expert">
+                    <i class="fas fa-skull"></i> Expert
+                </button>
+            </div>
+        </div>
+
+        <!-- Tracks Grid -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-road"></i> Available Tracks</h3>
+            </div>
+            <div id="tracks-container" class="tracks-grid">
+                <!-- Tracks will be loaded here -->
+                <div class="loading">Loading tracks...</div>
+            </div>
+        </div>
+
+        <!-- Training History -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-history"></i> Recent Training</h3>
+            </div>
+            <div id="training-history" class="training-history">
+                <!-- Training history will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Modal -->
+    <div id="training-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-track-name">Track Name</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="training-info">
+                    <!-- Training details will be populated here -->
+                </div>
+                <div class="training-actions">
+                    <button id="start-training" class="action-btn primary-btn">
+                        <i class="fas fa-play"></i> Start Training
+                    </button>
+                    <button id="cancel-training" class="action-btn secondary-btn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="frontend.js"></script>
+</body>
+
+  <footer>
+        <p>&copy; 2024 Ignition Shift</p>
+    </footer>
+    
+</html>
