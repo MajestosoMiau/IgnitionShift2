@@ -40,6 +40,13 @@ h1, h2, h3, h4, h5, h6,
     font-weight: 700;
 }
 
+.logo-image {
+    height: 40px; /* Adjust as needed */
+    width: auto;
+    max-width: 200px; /* Prevent it from being too wide */
+    object-fit: contain;
+}
+
 /* ========== NAVBAR - FIXED ========== */
 .navbar {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -118,28 +125,55 @@ h1, h2, h3, h4, h5, h6,
     display: flex;
     align-items: center;
     gap: 1rem;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 1.1rem;
 }
 
-.nav-user span {
-    font-family: 'Orbitron', sans-serif;
+.user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    color: white;
+}
+
+.user-stats {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #88ffff;
 }
 
 .logout-btn {
-    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    color: white;
-    border: none;
-    padding: 0.7rem 1.2rem;
-    border-radius: 8px;
+    background: rgba(255, 107, 107, 0.2);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    color: #ff6b6b;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    background: rgba(255, 107, 107, 0.3);
+    border-color: #ff6b6b;
+}
+
+.nav-guest {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    font-family: 'Rajdhani', sans-serif;
+}
+
+.login-btn {
+    background: rgba(0, 255, 136, 0.2);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.login-btn:hover {
+    background: rgba(0, 255, 136, 0.3);
+    border-color: #00ff88;
 }
 
 .logout-btn:hover {
@@ -147,11 +181,7 @@ h1, h2, h3, h4, h5, h6,
     box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
-.nav-guest {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
+
 
 .auth-nav-btn {
     padding: 0.7rem 1.5rem;
@@ -458,86 +488,228 @@ h1, h2, h3, h4, h5, h6,
     font-size: 1.1rem;
 }
 
-/* ========== ENHANCED STATS DISPLAY ========== */
-.stat-upgrade-item {
+/* Stats & Upgrades Section - INTEGRATED BAR DESIGN */
+.stats-upgrade-section {
+    flex: 1;
+    margin-left: 2rem;
+}
+
+.stats-upgrade-card {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(22, 33, 62, 0.95));
+    border: 1px solid rgba(0, 255, 255, 0.4);
+    border-radius: 12px;
+    padding: 1.5rem;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+}
+
+.stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+/* Stat Item - INTEGRATED BAR DESIGN */
+.stat-item {
+    background: rgba(0, 255, 255, 0.03);
+    border: 1px solid rgba(0, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.3s ease;
     position: relative;
 }
 
-.stat-bar-container {
-    width: 100%;
-    height: 6px;
-    background: rgba(0, 255, 255, 0.1);
-    border-radius: 3px;
-    margin: 8px 0;
-    overflow: hidden;
+.stat-item:hover {
+    border-color: rgba(0, 255, 255, 0.4);
+    background: rgba(0, 255, 255, 0.06);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 255, 255, 0.1);
 }
 
-.stat-bar {
-    height: 100%;
-    border-radius: 3px;
-    transition: all 0.3s ease;
-}
-
-.stat-bar-base {
-    background: linear-gradient(90deg, #00ff88, #00ffff);
-}
-
-.stat-bar-bonus {
-    background: linear-gradient(90deg, #a29bfe, #6c5ce7);
-}
-
-.stat-bar-negative {
-    background: linear-gradient(90deg, #ff6b6b, #ee5a24);
-}
-
-.stat-values {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.8rem;
-    color: #88ffff;
-    margin-top: 4px;
-}
-
-.base-value {
-    color: #00ffff;
-}
-
-.bonus-value {
-    color: #a29bfe;
-}
-
-.negative-value {
-    color: #ff6b6b;
-}
-
-/* ========== ENHANCED UPGRADE BUTTONS ========== */
-.upgrade-btn {
+.stat-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    font-family: 'Rajdhani', sans-serif;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+}
+
+/* Fixed Icons */
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    background: rgba(0, 255, 255, 0.08);
+    border: 2px solid;
+    flex-shrink: 0;
+}
+
+.stat-icon.power { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
+.stat-icon.speed { border-color: #00a8ff; color: #00a8ff; background: rgba(0, 168, 255, 0.1); }
+.stat-icon.dexterity { border-color: #9c88ff; color: #9c88ff; background: rgba(156, 136, 255, 0.1); }
+.stat-icon.structure { border-color: #e84118; color: #e84118; background: rgba(232, 65, 24, 0.1); }
+.stat-icon.handling { border-color: #fbc531; color: #fbc531; background: rgba(251, 197, 49, 0.1); }
+.stat-icon.luck { border-color: #00d2d3; color: #00d2d3; background: rgba(0, 210, 211, 0.1); }
+
+.stat-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 0;
+}
+
+.stat-name {
+    font-size: 0.95rem;
     font-weight: 600;
+    color: #ffffff;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #00ffff;
+    background: rgba(0, 255, 255, 0.1);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    flex-shrink: 0;
+}
+
+/* INTEGRATED STATS DISPLAY - Base + Items = Total */
+.stat-stats-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #88ffff;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(0, 255, 255, 0.05);
+    border-radius: 4px;
+    border: 1px solid rgba(0, 255, 255, 0.1);
+}
+
+.stat-base-value,
+.stat-items-value,
+.stat-total-value {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 600;
+}
+
+.stat-total-value {
+    color: #00ff88;
+    margin-left: auto;
+}
+
+/* PROGRESS BAR WITH LEVEL INDICATOR */
+.stat-progress-container {
+    margin: 0.8rem 0;
+}
+
+.stat-level-indicator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.stat-level {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #00ffff;
+    background: rgba(0, 255, 255, 0.1);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(0, 255, 255, 0.08);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00a8ff, #00ff88);
+    border-radius: 6px;
+    transition: width 0.5s ease-in-out;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* COMPACT UPGRADE BUTTON - FIXED OVERLAP */
+.upgrade-action {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 0.5rem;
+}
+
+/* Smaller Upgrade Button */
+.upgrade-btn {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 255, 255, 0.15));
+    border: 1px solid rgba(0, 255, 255, 0.4);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    color: #00ffff;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 600;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 255, 0.1));
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    color: #00ffff;
-    min-width: 100px;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 80px;
     justify-content: center;
+    flex-shrink: 0;
+    height: 32px;
+}
+
+.upgrade-cost {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.upgrade-btn i {
+    font-size: 0.7rem;
 }
 
 .upgrade-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 255, 0.2));
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.25), rgba(0, 255, 255, 0.25));
     border-color: #00ffff;
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
 }
 
 .upgrade-btn:disabled {
-    background: rgba(102, 102, 102, 0.2);
+    background: rgba(102, 102, 102, 0.1);
     border-color: rgba(102, 102, 102, 0.3);
     color: #666;
     cursor: not-allowed;
@@ -545,86 +717,147 @@ h1, h2, h3, h4, h5, h6,
     box-shadow: none;
 }
 
-.upgrade-cost {
-    font-family: 'Orbitron', sans-serif;
-    font-weight: 700;
-    font-size: 1rem;
-}
-
-.upgrade-btn i {
-    font-size: 0.9rem;
-}
 
 /* Stat-specific button colors */
 .upgrade-btn.power {
-    background: linear-gradient(135deg, rgba(255, 65, 108, 0.1), rgba(255, 107, 107, 0.1));
-    border-color: rgba(255, 107, 107, 0.3);
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.15), rgba(255, 65, 108, 0.15));
+    border-color: rgba(255, 107, 107, 0.4);
     color: #ff6b6b;
 }
 
 .upgrade-btn.speed {
-    background: linear-gradient(135deg, rgba(255, 195, 0, 0.1), rgba(254, 202, 87, 0.1));
-    border-color: rgba(254, 202, 87, 0.3);
-    color: #feca57;
+    background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 119, 255, 0.15));
+    border-color: rgba(0, 168, 255, 0.4);
+    color: #00a8ff;
 }
 
 .upgrade-btn.dexterity {
-    background: linear-gradient(135deg, rgba(0, 245, 160, 0.1), rgba(0, 255, 136, 0.1));
-    border-color: rgba(0, 255, 136, 0.3);
-    color: #00ff88;
+    background: linear-gradient(135deg, rgba(156, 136, 255, 0.15), rgba(128, 0, 255, 0.15));
+    border-color: rgba(156, 136, 255, 0.4);
+    color: #9c88ff;
 }
 
 .upgrade-btn.structure {
-    background: linear-gradient(135deg, rgba(0, 178, 255, 0.1), rgba(72, 219, 251, 0.1));
-    border-color: rgba(72, 219, 251, 0.3);
-    color: #48dbfb;
+    background: linear-gradient(135deg, rgba(232, 65, 24, 0.15), rgba(199, 0, 57, 0.15));
+    border-color: rgba(232, 65, 24, 0.4);
+    color: #e84118;
 }
 
 .upgrade-btn.handling {
-    background: linear-gradient(135deg, rgba(147, 51, 234, 0.1), rgba(162, 155, 254, 0.1));
-    border-color: rgba(162, 155, 254, 0.3);
-    color: #a29bfe;
+    background: linear-gradient(135deg, rgba(251, 197, 49, 0.15), rgba(245, 159, 0, 0.15));
+    border-color: rgba(251, 197, 49, 0.4);
+    color: #fbc531;
 }
 
 .upgrade-btn.luck {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(0, 255, 136, 0.1));
-    border-color: rgba(0, 255, 136, 0.3);
-    color: #22c55e;
+    background: linear-gradient(135deg, rgba(0, 210, 211, 0.15), rgba(0, 180, 216, 0.15));
+    border-color: rgba(0, 210, 211, 0.4);
+    color: #00d2d3;
 }
 
-/* ========== QUICK STATS - CONSISTENT STYLING ========== */
+/* Tooltip */
+.stat-tooltip {
+    position: absolute;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 15, 30, 0.95);
+    color: #88ffff;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 100;
+    border: 1px solid rgba(0, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+}
+
+.stat-item:hover .stat-tooltip {
+    opacity: 1;
+}
+
+/* Header improvements */
+.card-header {
+    margin-bottom: 1.5rem;
+}
+
+.card-header h3 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.upgrade-info {
+    font-size: 0.8rem;
+    color: #88ffff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .garage-content {
+        flex-direction: column;
+    }
+    
+    .stats-upgrade-section {
+        margin-left: 0;
+        margin-top: 1.5rem;
+    }
+    
+    .stat-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .upgrade-btn {
+        min-width: 90px;
+        padding: 0.5rem 0.8rem;
+    }
+    
+    .upgrade-action {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
+
+/* Quick Stats - if needed */
 .quick-stats {
     display: flex;
-    gap: 1.5rem;
+    gap: 1rem;
     flex-wrap: wrap;
     justify-content: center;
-    margin-top: 1.5rem;
+    margin-top: 1rem;
 }
 
 .quick-stat {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.8rem 1.5rem;
-    background: rgba(0, 255, 255, 0.1);
-    border: 1px solid #00ffff;
-    border-radius: 10px;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    background: rgba(0, 255, 255, 0.08);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 8px;
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
 }
 
 .quick-stat:hover {
-    background: rgba(0, 255, 255, 0.15);
-    transform: translateY(-2px);
+    background: rgba(0, 255, 255, 0.12);
+    transform: translateY(-1px);
 }
 
 .quick-stat i {
     color: #00ffff;
-    font-size: 1.3rem;
+    font-size: 1.1rem;
 }
 
 .quick-stat span {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     color: #ffffff;
 }
 

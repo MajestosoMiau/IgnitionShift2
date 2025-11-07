@@ -1,4 +1,4 @@
-// frontend.js - COMPLETE VERSION WITH ALL EXISTING CODE + NEW FEATURES
+// frontend.js - COMPLETE VERSION WITH ALL EXISTING CODE + STAT BAR FIXES
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
 import { 
     getAuth, 
@@ -702,8 +702,7 @@ function loadNavbar() {
         <nav class="navbar">
             <div class="nav-container">
                 <a href="index.html" class="nav-logo">
-                    <i class="fas fa-car"></i>
-                    CYBER GARAGE
+                    <img src="images/logo.jpg" alt="IGNITION SHIFT" class="logo-image">
                 </a>
                 <div class="nav-menu">
                     <a href="index.html" class="nav-link" id="nav-home"><i class="fas fa-home"></i> Home</a>
@@ -716,6 +715,21 @@ function loadNavbar() {
                     <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions</a>
                 </div>
                 
+                <!-- Simple user section that matches your existing code -->
+                <div class="nav-user" id="nav-user" style="display: none;">
+                    <div class="user-info">
+                        <span class="user-name">Welcome, Racer!</span>
+                    </div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+                
+                <div class="nav-guest" id="nav-guest">
+                    <a href="login.html" class="login-btn">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </a>
+                </div>
             </div>
         </nav>
     `;
@@ -742,11 +756,18 @@ function updateNavbarAuthState() {
     const navUser = document.getElementById('nav-user');
     const navGuest = document.getElementById('nav-guest');
     const playerNameNav = document.getElementById('player-name-nav');
+    const navGold = document.getElementById('nav-gold');
+    const navLevel = document.getElementById('nav-level');
 
     if (user && navUser && navGuest) {
         navUser.style.display = 'flex';
         navGuest.style.display = 'none';
         if (playerNameNav) playerNameNav.textContent = 'Loading...';
+        
+        // Load user data to update gold and level
+        loadPlayerData(user.uid).then(() => {
+            // These will be updated when player data loads
+        });
     } else if (navUser && navGuest) {
         navUser.style.display = 'none';
         navGuest.style.display = 'flex';
@@ -1251,10 +1272,17 @@ function updatePlayerUI(userData) {
             if (element) element.textContent = userData.username || "Racer";
         });
 
-        const playerNameNav = document.getElementById('player-name-nav');
-        if (playerNameNav) {
-            playerNameNav.textContent = userData.username || userData.email?.split('@')[0] || "Racer";
-        }
+         // Update navbar username if user is logged in
+        const user = auth.currentUser;
+        if (user) {
+            const navUser = document.getElementById('nav-user');
+            if (navUser) {
+                const userNameElement = navUser.querySelector('.user-name');
+                if (userNameElement) {
+                    const displayName = userData.username || userData.email?.split('@')[0] || "Racer";
+                    userNameElement.textContent = `Welcome, ${displayName}!`;
+                }
+            }}
         
         const currentLevel = userData.level || 1;
         const currentXP = userData.xp || 0;
@@ -1311,6 +1339,18 @@ function updatePlayerUI(userData) {
         }
 
         updateEnhancedStatsDisplay(userData);
+        
+        // FIXED: Call the stat bars update function
+        updateStatBars(userData);
+
+        // Update navbar user info
+        const playerNameNav = document.getElementById('player-name-nav');
+        const navGold = document.getElementById('nav-gold');
+        const navLevel = document.getElementById('nav-level');
+        
+        if (playerNameNav) playerNameNav.textContent = userData.username || userData.email?.split('@')[0] || "Racer";
+        if (navGold) navGold.textContent = userData.gold || 0;
+        if (navLevel) navLevel.textContent = userData.level || 1;
         
     } catch (error) {
         console.error("Error in updatePlayerUI:", error);
@@ -2105,7 +2145,7 @@ async function displayTracks(tracks) {
     
     if (!tracksContainer || !user) return;
     
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const userDoc = await getDoc(doc(db, "users", user.uid));
     const userData = userDoc.exists() ? userDoc.data() : {};
     const cooldowns = userData.trainingCooldowns || {};
     const userCondition = userData.condition || 100;
@@ -2188,7 +2228,7 @@ async function showTrainingModal(trackId) {
         
         const track = trackDoc.data();
         const user = auth.currentUser;
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         const userData = userDoc.data();
         
         modalTrackName.textContent = track.name || 'Unknown Track';
@@ -2256,7 +2296,7 @@ async function startTrainingSession() {
     
     try {
         const trackDoc = await getDoc(doc(db, 'tracks', selectedTrack));
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         
         if (!trackDoc.exists() || !userDoc.exists()) {
             alert('Error starting training session');
@@ -2281,7 +2321,7 @@ async function startTrainingSession() {
         const reward = calculateTrainingReward(track, completionTime);
         const cooldownEnd = new Date(Date.now() + (track.cooldown || 0) * 1000);
         
-        await updateDoc(doc(db, 'users', user.uid), {
+        await updateDoc(doc(db, "users", user.uid), {
             condition: (userData.condition || 0) - (track.conditionCost || 0),
             gold: (userData.gold || 0) + reward.gold,
             fame: (userData.fame || 0) + reward.fame,
@@ -2361,7 +2401,7 @@ async function loadTrainingHistory() {
     if (!user) return;
     
     try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (!userDoc.exists()) return;
         const userData = userDoc.data();
         const history = userData.trainingHistory || [];
@@ -3649,44 +3689,146 @@ async function cleanupExpiredChallenges() {
     }
 }
 
-// ========STAT BARS =========
-function updateStatBars() {
-    const stats = ['power', 'speed', 'dexterity', 'structure', 'handling', 'luck'];
-    
-    stats.forEach(stat => {
-        const baseValue = parseInt(document.getElementById(`${stat}`).textContent) || 0;
-        const bonusValue = 0; // This should come from your equipped items data
-        const negativeValue = 0; // This should come from your negative effects data
-        
-        const totalValue = baseValue + bonusValue + negativeValue;
-        
-        // Calculate percentages
-        const basePercent = totalValue > 0 ? (baseValue / totalValue) * 100 : 0;
-        const bonusPercent = totalValue > 0 ? (bonusValue / totalValue) * 100 : 0;
-        const negativePercent = totalValue > 0 ? (Math.abs(negativeValue) / totalValue) * 100 : 0;
-        
-        // Update the bars
-        const baseBar = document.querySelector(`.stat-upgrade-item .stat-bar-base[data-stat="${stat}"]`);
-        const bonusBar = document.querySelector(`.stat-upgrade-item .stat-bar-bonus[data-stat="${stat}"]`);
-        const negativeBar = document.querySelector(`.stat-upgrade-item .stat-bar-negative[data-stat="${stat}"]`);
-        
-        if (baseBar) baseBar.style.width = `${basePercent}%`;
-        if (bonusBar) bonusBar.style.width = `${bonusPercent}%`;
-        if (negativeBar) negativeBar.style.width = `${negativePercent}%`;
-        
-        // Update values display
-        const baseValueEl = document.querySelector(`.base-value[data-stat="${stat}"]`);
-        const bonusValueEl = document.querySelector(`.bonus-value[data-stat="${stat}"]`);
-        const negativeValueEl = document.querySelector(`.negative-value[data-stat="${stat}"]`);
-        const totalValueEl = document.querySelector(`.total-value[data-stat="${stat}"]`);
-        
-        if (baseValueEl) baseValueEl.textContent = `Base: ${baseValue}`;
-        if (bonusValueEl) bonusValueEl.textContent = bonusValue > 0 ? `+${bonusValue}` : '';
-        if (negativeValueEl) negativeValueEl.textContent = negativeValue < 0 ? `${negativeValue}` : '';
-        if (totalValueEl) totalValueEl.textContent = `Total: ${totalValue}`;
-    });
+// ========== STAT BARS SYSTEM - COMPLETELY FIXED ==========
+// FIXED: This function now properly updates all stat bars with three colors
+function updateStatBars(userData) {
+    if (!userData) {
+        console.error('No user data provided to updateStatBars');
+        return;
+    }
 
-   
+    const stats = userData.stats || {};
+    const inventory = userData.inventory || [];
+    const calculatedStats = calculateTotalStats(stats, inventory);
+    
+    console.log('Updating stat bars with:', calculatedStats);
+
+    const statConfigs = [
+        { stat: 'power', color1: '#ff6b6b', color2: '#00ff88', color3: '#ff4757' },
+        { stat: 'speed', color1: '#00a8ff', color2: '#00ff88', color3: '#ff4757' },
+        { stat: 'dexterity', color1: '#9c88ff', color2: '#00ff88', color3: '#ff4757' },
+        { stat: 'handling', color1: '#fbc531', color2: '#00ff88', color3: '#ff4757' },
+        { stat: 'structure', color1: '#7c3320ff', color2: '#00ff88', color3: '#ff4757' },
+        { stat: 'luck', color1: '#00d2d3', color2: '#00ff88', color3: '#ff4757' }
+    ];
+
+    statConfigs.forEach(config => {
+        const baseValue = calculatedStats.base[config.stat] || 0;
+        const bonusValue = calculatedStats.bonuses[config.stat] || 0;
+        const totalValue = calculatedStats.total[config.stat] || 0;
+        
+        // Calculate percentages for the bar segments
+        const maxStatValue = 50; // Maximum stat value for 100% bar width
+        const basePercent = Math.min(100, (baseValue / maxStatValue) * 100);
+        const bonusPercent = Math.min(100 - basePercent, (bonusValue / maxStatValue) * 100);
+        const negativeValue = Math.max(0, baseValue - totalValue); // Calculate negative effect if any
+        const negativePercent = negativeValue > 0 ? Math.min(100 - basePercent - bonusPercent, (negativeValue / maxStatValue) * 100) : 0;
+        
+        // Find or create stat bar container
+        let statBarContainer = document.querySelector(`.stat-bar-container[data-stat="${config.stat}"]`) ||
+                              document.querySelector(`[data-stat="${config.stat}"] .stat-bars`) ||
+                              document.querySelector(`.stat-upgrade-item[data-stat="${config.stat}"] .stat-bars`);
+        
+        // If no container exists, create one
+        if (!statBarContainer) {
+            const statItem = document.querySelector(`[data-stat="${config.stat}"]`) || 
+                           document.querySelector(`.stat-upgrade-item[data-stat="${config.stat}"]`);
+            if (statItem) {
+                statBarContainer = document.createElement('div');
+                statBarContainer.className = 'stat-bars';
+                statBarContainer.style.cssText = `
+                    display: flex;
+                    width: 100%;
+                    height: 20px;
+                    background: rgba(0, 255, 255, 0.1);
+                    border-radius: 4px;
+                    overflow: hidden;
+                    margin: 5px 0;
+                `;
+                statItem.appendChild(statBarContainer);
+            }
+        }
+
+        if (statBarContainer) {
+            // Clear existing bars
+            statBarContainer.innerHTML = '';
+            
+            // Create base stat bar (color1)
+            if (basePercent > 0) {
+                const baseBar = document.createElement('div');
+                baseBar.className = 'stat-bar-base';
+                baseBar.style.cssText = `
+                    width: ${basePercent}%;
+                    background: ${config.color1};
+                    height: 100%;
+                    transition: width 0.5s ease-in-out;
+                `;
+                baseBar.setAttribute('data-stat', config.stat);
+                baseBar.title = `Base: ${baseValue}`;
+                statBarContainer.appendChild(baseBar);
+            }
+            
+            // Create bonus stat bar (color2)
+            if (bonusPercent > 0) {
+                const bonusBar = document.createElement('div');
+                bonusBar.className = 'stat-bar-bonus';
+                bonusBar.style.cssText = `
+                    width: ${bonusPercent}%;
+                    background: ${config.color2};
+                    height: 100%;
+                    transition: width 0.5s ease-in-out;
+                `;
+                bonusBar.setAttribute('data-stat', config.stat);
+                bonusBar.title = `Bonus: +${bonusValue}`;
+                statBarContainer.appendChild(bonusBar);
+            }
+            
+            // Create negative stat bar (color3) if there are negative effects
+            if (negativePercent > 0) {
+                const negativeBar = document.createElement('div');
+                negativeBar.className = 'stat-bar-negative';
+                negativeBar.style.cssText = `
+                    width: ${negativePercent}%;
+                    background: ${config.color3};
+                    height: 100%;
+                    transition: width 0.5s ease-in-out;
+                `;
+                negativeBar.setAttribute('data-stat', config.stat);
+                negativeBar.title = `Negative: -${negativeValue}`;
+                statBarContainer.appendChild(negativeBar);
+            }
+            
+            // Update value displays
+            const baseValueEl = document.querySelector(`.base-value[data-stat="${config.stat}"]`) ||
+                              document.querySelector(`[data-stat="${config.stat}"] .base-value`);
+            const bonusValueEl = document.querySelector(`.bonus-value[data-stat="${config.stat}"]`) ||
+                               document.querySelector(`[data-stat="${config.stat}"] .bonus-value`);
+            const totalValueEl = document.querySelector(`.total-value[data-stat="${config.stat}"]`) ||
+                               document.querySelector(`[data-stat="${config.stat}"] .total-value`);
+            
+            if (baseValueEl) baseValueEl.textContent = `Base: ${baseValue}`;
+            if (bonusValueEl) bonusValueEl.textContent = bonusValue > 0 ? `+${bonusValue}` : '';
+            if (totalValueEl) totalValueEl.textContent = `Total: ${totalValue}`;
+            
+            // If no value displays exist, create them
+            if (!baseValueEl || !bonusValueEl || !totalValueEl) {
+                const valueContainer = document.querySelector(`[data-stat="${config.stat}"] .stat-values`) ||
+                                     document.createElement('div');
+                if (!valueContainer.className) valueContainer.className = 'stat-values';
+                
+                valueContainer.innerHTML = `
+                    <div class="base-value" data-stat="${config.stat}">Base: ${baseValue}</div>
+                    <div class="bonus-value" data-stat="${config.stat}">${bonusValue > 0 ? `+${bonusValue}` : ''}</div>
+                    <div class="total-value" data-stat="${config.stat}">Total: ${totalValue}</div>
+                `;
+                
+                const statItem = document.querySelector(`[data-stat="${config.stat}"]`);
+                if (statItem && !statItem.querySelector('.stat-values')) {
+                    statItem.appendChild(valueContainer);
+                }
+            }
+        }
+    });
 }
 
 // Player Listings Functions
@@ -3977,8 +4119,6 @@ let playerListings;
 document.addEventListener('DOMContentLoaded', () => {
     playerListings = new PlayerListings();
 });
-
-// Call this whenever stats change (after upgrades, equipment changes, etc.)---
 
 // ========== ONBOARDING TUTORIAL SYSTEM ==========
 
@@ -4451,6 +4591,53 @@ style.textContent = `
     .inventory-empty h4 {
         color: #00ffff;
         margin-bottom: 0.5rem;
+    }
+    
+    /* Stat Bars Styles */
+    .stat-bars {
+        display: flex;
+        width: 100%;
+        height: 20px;
+        background: rgba(0, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 5px 0;
+    }
+    
+    .stat-bar-base {
+        height: 100%;
+        transition: width 0.5s ease-in-out;
+    }
+    
+    .stat-bar-bonus {
+        height: 100%;
+        transition: width 0.5s ease-in-out;
+    }
+    
+    .stat-bar-negative {
+        height: 100%;
+        transition: width 0.5s ease-in-out;
+    }
+    
+    .stat-values {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: #88ffff;
+        margin-top: 5px;
+    }
+    
+    .base-value {
+        color: #00ffff;
+    }
+    
+    .bonus-value {
+        color: #00ff88;
+    }
+    
+    .total-value {
+        color: #ffffff;
+        font-weight: bold;
     }
 `;
 document.head.appendChild(style);
