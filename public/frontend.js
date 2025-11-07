@@ -3980,6 +3980,309 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Call this whenever stats change (after upgrades, equipment changes, etc.)---
 
+// ========== ONBOARDING TUTORIAL SYSTEM ==========
+
+class OnboardingTutorial {
+    constructor() {
+        this.currentSlide = 1;
+        this.totalSlides = 8; // Updated to 8 slides
+        this.debugMode = true; // Set to false when done testing
+        this.init();
+    }
+
+    init() {
+        console.log('🚀 OnboardingTutorial initialized with', this.totalSlides, 'slides');
+        this.setupEventListeners();
+        this.checkFirstTimeUser();
+    }
+
+    async checkFirstTimeUser() {
+        console.log('🔍 Checking if first time user...');
+        
+        // Debug mode - always show tutorial
+        if (this.debugMode) {
+            console.log('🐛 DEBUG MODE: Forcing tutorial to show');
+            setTimeout(() => {
+                this.showTutorial();
+            }, 1500);
+            return;
+        }
+
+        // Production mode - check if completed before
+        const userData = await this.getUserData();
+        
+        if (!userData || !userData.hasCompletedTutorial) {
+            console.log('👋 First time user - showing tutorial');
+            setTimeout(() => {
+                this.showTutorial();
+            }, 1000);
+        } else {
+            console.log('🎯 Returning user - tutorial already completed');
+        }
+    }
+
+    async getUserData() {
+        // Check localStorage for tutorial completion
+        const tutorialCompleted = localStorage.getItem('ignition_tutorial_completed');
+        console.log('📋 Tutorial completion status:', tutorialCompleted);
+        return {
+            hasCompletedTutorial: tutorialCompleted === 'true'
+        };
+    }
+
+    showTutorial() {
+        console.log('🎬 Showing tutorial...');
+        const modal = document.getElementById('onboarding-modal');
+        if (!modal) {
+            console.error('❌ Modal element not found!');
+            return;
+        }
+        
+        // Reset to first slide
+        this.currentSlide = 1;
+        this.updateSlides();
+        this.updateProgress();
+        
+        modal.style.display = 'block';
+        console.log('✅ Tutorial visible - Slide', this.currentSlide);
+    }
+
+    hideTutorial() {
+        const dontShowAgain = document.getElementById('dont-show-again');
+        const shouldSavePreference = dontShowAgain && dontShowAgain.checked;
+        
+        if (shouldSavePreference) {
+            console.log('💾 Saving tutorial preference: Do not show again');
+            this.markTutorialCompleted();
+        } else {
+            console.log('🚫 Tutorial closed but will show again next time');
+        }
+        
+        document.getElementById('onboarding-modal').style.display = 'none';
+    }
+
+    nextSlide() {
+        if (this.currentSlide < this.totalSlides) {
+            this.currentSlide++;
+            this.updateSlides();
+            this.updateProgress();
+            console.log('➡️ Moved to slide', this.currentSlide);
+        } else {
+            console.log('🎯 Reached final slide');
+        }
+    }
+
+    prevSlide() {
+        if (this.currentSlide > 1) {
+            this.currentSlide--;
+            this.updateSlides();
+            this.updateProgress();
+            console.log('⬅️ Moved to slide', this.currentSlide);
+        }
+    }
+
+    updateSlides() {
+        // Hide all slides
+        document.querySelectorAll('.tutorial-slide').forEach(slide => {
+            slide.classList.remove('active');
+        });
+
+        // Show current slide
+        const currentSlide = document.querySelector(`[data-slide="${this.currentSlide}"]`);
+        if (currentSlide) {
+            currentSlide.classList.add('active');
+        }
+
+        // Update button states
+        this.updateButtonStates();
+    }
+
+    updateProgress() {
+        const progress = (this.currentSlide / this.totalSlides) * 100;
+        const progressFill = document.querySelector('.progress-fill');
+        const progressText = document.querySelector('.progress-text');
+        
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `Step ${this.currentSlide} of ${this.totalSlides}`;
+        }
+        
+        console.log('📊 Progress:', progress.toFixed(1) + '%');
+    }
+
+    updateButtonStates() {
+        const prevBtn = document.getElementById('prev-slide');
+        const nextBtn = document.getElementById('next-slide');
+        const skipBtn = document.getElementById('skip-tutorial');
+
+        // Update prev button
+        if (prevBtn) {
+            prevBtn.disabled = this.currentSlide === 1;
+            prevBtn.style.display = this.currentSlide === 1 ? 'none' : 'block';
+        }
+
+        // Update next button - hide on last slide
+        if (nextBtn) {
+            if (this.currentSlide === this.totalSlides) {
+                nextBtn.style.display = 'none';
+            } else {
+                nextBtn.style.display = 'block';
+            }
+        }
+
+        // Update skip button - hide on last slide
+        if (skipBtn) {
+            skipBtn.style.display = this.currentSlide === this.totalSlides ? 'none' : 'block';
+        }
+    }
+
+    setupEventListeners() {
+        console.log('🔧 Setting up tutorial event listeners...');
+        
+        // Navigation buttons
+        const nextBtn = document.getElementById('next-slide');
+        const prevBtn = document.getElementById('prev-slide');
+        const skipBtn = document.getElementById('skip-tutorial');
+        const startBtn = document.getElementById('start-racing-btn');
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this.nextSlide();
+            });
+        } else {
+            console.error('❌ Next button not found');
+        }
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this.prevSlide();
+            });
+        } else {
+            console.error('❌ Previous button not found');
+        }
+
+        if (skipBtn) {
+            skipBtn.addEventListener('click', () => {
+                console.log('⏭️ Tutorial skipped by user');
+                document.getElementById('onboarding-modal').style.display = 'none';
+                // Don't save preference when skipping
+            });
+        } else {
+            console.error('❌ Skip button not found');
+        }
+
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                console.log('🏁 Tutorial completed - starting racing!');
+                this.hideTutorial();
+            });
+        } else {
+            console.error('❌ Start racing button not found');
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('onboarding-modal');
+            if (modal && modal.style.display === 'block') {
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    this.nextSlide();
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    this.prevSlide();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    console.log('ESC: Tutorial closed');
+                    document.getElementById('onboarding-modal').style.display = 'none';
+                }
+            }
+        });
+
+        console.log('✅ Event listeners setup complete');
+    }
+
+    markTutorialCompleted() {
+        console.log('💾 Saving tutorial completion to localStorage');
+        localStorage.setItem('ignition_tutorial_completed', 'true');
+        
+        // Also save to Firebase user preferences if user is logged in
+        this.saveTutorialCompletion();
+    }
+
+    async saveTutorialCompletion() {
+        if (typeof currentUser !== 'undefined' && currentUser) {
+            try {
+                console.log('🔥 Saving tutorial completion to Firebase');
+                await setDoc(doc(db, 'userPreferences', currentUser.uid), {
+                    hasCompletedTutorial: true,
+                    tutorialCompletedAt: new Date()
+                }, { merge: true });
+            } catch (error) {
+                console.error('❌ Error saving tutorial completion to Firebase:', error);
+            }
+        } else {
+            console.log('👤 No user logged in, skipping Firebase save');
+        }
+    }
+
+    // Debug methods
+    resetTutorial() {
+        localStorage.removeItem('ignition_tutorial_completed');
+        console.log('🔄 Tutorial reset - will show on next page load');
+    }
+
+    showTutorialManually() {
+        console.log('🐛 Manual tutorial trigger');
+        this.resetTutorial();
+        this.showTutorial();
+    }
+}
+
+// Initialize tutorial and expose for debugging
+let onboardingTutorial;
+document.addEventListener('DOMContentLoaded', () => {
+    onboardingTutorial = new OnboardingTutorial();
+    
+    // Expose to global for easy console access
+    window.debugTutorial = onboardingTutorial;
+    
+    // Add debug button to page (remove in production)
+    if (onboardingTutorial.debugMode) {
+        const debugBtn = document.createElement('button');
+        debugBtn.innerHTML = '🔧 Show Tutorial';
+        debugBtn.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 10px;
+            z-index: 10000;
+            background: linear-gradient(135deg, #00ff88, #00ffff);
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
+        `;
+        debugBtn.onclick = () => onboardingTutorial.showTutorialManually();
+        debugBtn.title = 'Debug: Show Tutorial';
+        document.body.appendChild(debugBtn);
+        console.log('🔧 Debug button added to page');
+    }
+});
+
+// Console commands for testing:
+console.log(`
+🎮 Tutorial Debug Commands:
+• debugTutorial.showTutorialManually() - Show tutorial now
+• debugTutorial.resetTutorial() - Reset completion status
+• localStorage.removeItem('ignition_tutorial_completed') - Clear storage
+`);
+
 // ========== APPLICATION INITIALIZATION ==========
 function initializePage() {
     const path = window.location.pathname;

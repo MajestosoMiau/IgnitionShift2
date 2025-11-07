@@ -12,6 +12,141 @@
     <!-- Navigation -->
     <div id="navbar-container"></div>
 
+    <!-- Onboarding Tutorial Modal -->
+<div class="modal onboarding-modal" id="onboarding-modal" style="display: none;">
+    <div class="modal-content onboarding-content">
+        <!-- Progress Indicator -->
+        <div class="onboarding-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span class="progress-text">Step 1 of 8</span>
+        </div>
+
+        <!-- Tutorial Content Area -->
+        <div class="tutorial-slide active" data-slide="1">
+            <div class="tutorial-icon">
+                <i class="fas fa-flag-checkered"></i>
+            </div>
+            <h2>Welcome to Ignition Shift!</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/welcome.png" alt="Welcome">
+            </div>
+            <p>Get ready to build your racing empire. Let's take a quick tour of what you can do!</p>
+            <!-- Add "Don't show again" checkbox -->
+    <div class="tutorial-option">
+        <label class="checkbox-container">
+            <input type="checkbox" id="dont-show-again">
+            <span class="checkmark"></span>
+            Don't show this tutorial again
+        </label>
+    </div>
+        </div>
+
+        <div class="tutorial-slide" data-slide="2">
+            <div class="tutorial-icon">
+                <i class="fas fa-warehouse"></i>
+            </div>
+            <h2>Your Garage</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/garage.png" alt="Garage">
+            </div>
+            <p>Upgrade your vehicle stats here. Power, Speed, Handling - make your car unbeatable! While you're at it, take a good rest if needed!</p>
+        </div>
+
+        <div class="tutorial-slide" data-slide="3">
+            <div class="tutorial-icon">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <h2>Shop & Marketplace</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/shop.png" alt="Shop">
+            </div>
+            <p>Buy new cars and parts in the Shop. Later, trade with other players in the Marketplace!</p>
+        </div>
+
+        <div class="tutorial-slide" data-slide="4">
+            <div class="tutorial-icon">
+                <i class="fas fa-trophy"></i>
+            </div>
+            <h2>Training & Rankings</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/training.png" alt="Training">
+            </div>
+            <p>Practice on different tracks to earn rewards and climb the global leaderboards!</p>
+        </div>
+
+        <div class="tutorial-slide" data-slide="5">
+            <div class="tutorial-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h2>Join a Team</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/teams.png" alt="Teams">
+            </div>
+            <p>Team up with other racers for exclusive benefits and team-only markets!</p>
+        </div>
+            <div class="tutorial-slide" data-slide="6">
+            <div class="tutorial-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h2>Daily Challenges!</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/dailyc.png" alt="DailyC">
+            </div>
+            <p>Check out the daily challenges to gain even more rewards!</p>
+        </div>
+        <div class="tutorial-slide" data-slide="7">
+            <div class="tutorial-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h2>PvP Challenges!</h2>
+            <div class="tutorial-image">
+                <img src="images/tutorial/pvprace.png" alt="pvprace">
+            </div>
+            <p>Go to the missions page to accept or decline challenges from other racers!</p>
+        </div>
+
+       <div class="tutorial-slide" data-slide="8">
+    <div class="tutorial-icon">
+        <i class="fas fa-rocket"></i>
+    </div>
+    <h2>Ready to Race!</h2>
+    <div class="tutorial-image">
+        <img src="images/tutorial/ready.png" alt="Ready">
+    </div>
+    <p>You're all set! Start by upgrading your stats in the Garage, then hit the tracks!</p>
+    
+    <!-- Add "Don't show again" checkbox -->
+    <div class="tutorial-option">
+        <label class="checkbox-container">
+            <input type="checkbox" id="dont-show-again">
+            <span class="checkmark"></span>
+            Don't show this tutorial again
+        </label>
+    </div>
+    
+    <div class="call-to-action">
+        <button class="cta-btn" id="start-racing-btn">
+            <i class="fas fa-play"></i> Start Racing!
+        </button>
+    </div>
+</div>
+        <!-- Navigation Controls -->
+        <div class="tutorial-controls">
+            <button class="nav-btn prev-btn" id="prev-slide">
+                <i class="fas fa-chevron-left"></i> Back
+            </button>
+            <button class="nav-btn next-btn" id="next-slide">
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+            <button class="nav-btn skip-btn" id="skip-tutorial">
+                Skip Tutorial
+            </button>
+        </div>
+    </div>
+</div>
+
     <div class="container">  
         <!-- PLAYER DASHBOARD (Visible when logged in) -->
         <div id="player-view" style="display: none;">
