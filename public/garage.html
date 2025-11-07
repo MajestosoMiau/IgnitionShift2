@@ -1,111 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ignition Shift - Garage</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
 </head>
+
 <body>
     <!-- Navigation -->
-<div id="navbar-container"></div>
+    <div id="navbar-container"></div>
 
     <!-- Main Content -->
     <div class="container">
         <!-- Guest View -->
-        
-            <div class="auth-section" id="auth-section">
-                <div class="auth-container">
-                    <h2><i class="fas fa-warehouse"></i> Garage Access</h2>
-                    <p>Please log in to access your garage and upgrade your stats</p>
-                    <form id="authForm" class="auth-form">
-                        <div class="form-group">
-                            <input type="email" id="email" placeholder="Email" required>
-                            <i class="fas fa-envelope input-icon"></i>
-                        </div>
-                        <div class="form-group">
-                            <input type="password" id="password" placeholder="Password" required>
-                            <i class="fas fa-lock input-icon"></i>
-                        </div>
-                        <button type="submit" class="auth-btn">
-                            <i class="fas fa-sign-in-alt"></i> Enter Garage
-                        </button>
-                    </form>
-                    <div id="authMessage" class="auth-message"></div>
-                </div>
+
+        <div class="auth-section" id="auth-section">
+            <div class="auth-container">
+                <h2><i class="fas fa-warehouse"></i> Garage Access</h2>
+                <p>Please log in to access your garage and upgrade your stats</p>
+                <form id="authForm" class="auth-form">
+                    <div class="form-group">
+                        <input type="email" id="email" placeholder="Email" required>
+                        <i class="fas fa-envelope input-icon"></i>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="password" placeholder="Password" required>
+                        <i class="fas fa-lock input-icon"></i>
+                    </div>
+                    <button type="submit" class="auth-btn">
+                        <i class="fas fa-sign-in-alt"></i> Enter Garage
+                    </button>
+                </form>
+                <div id="authMessage" class="auth-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player View -->
+    <div id="player-view" class="player-view" style="display: none;">
+        <!-- Header Section -->
+        <div class="garage-header">
+            <div class="header-content">
+                <h1><i class="fas fa-warehouse"></i> YOUR GARAGE</h1>
+                <p>Upgrade your stats and dominate the track</p>
             </div>
         </div>
 
-        <!-- Player View -->
-        <div id="player-view" class="player-view" style="display: none;">
-            <!-- Header Section -->
-            <div class="garage-header">
-                <div class="header-content">
-                    <h1><i class="fas fa-warehouse"></i> YOUR GARAGE</h1>
-                    <p>Upgrade your stats and dominate the track</p>
+        <!-- Main Garage Content -->
+        <div class="garage-content">
+            <!-- Left Column - Current Car -->
+            <div class="car-display-section">
+                <div class="car-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-car"></i> CURRENT VEHICLE</h3>
+                    </div>
+                    <div class="car-image-container">
+                        <img id="current-car-image" src="images/cars/rusty_rider.jpg" alt="Current Car"
+                            class="car-image">
+                        <div class="car-overlay">
+                            <div class="car-info">
+                                <h4 id="current-car-name">Rusty Rider</h4>
+                                <p id="current-car-stats">Equipped • Ready to Race</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="car-status">
+                        <div class="status-item">
+                            <span class="status-label">Condition</span>
+                            <div class="condition-bar">
+                                <div class="condition-fill" style="width: 100%;"></div>
+                            </div>
+                            <span class="condition-value" id="condition">100%</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="player-quick-stats">
-                    <div class="quick-stat">
-                        <i class="fas fa-coins"></i>
-                        <span id="gold">100</span>
-                    </div>
-                    <div class="quick-stat">
-                        <i class="fas fa-trophy"></i>
-                        <span id="level">1</span>
-                    </div>
-                    <div class="quick-stat">
-                        <i class="fas fa-star"></i>
-                        <span id="fame">0</span>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Main Garage Content -->
-            <div class="garage-content">
-                <!-- Left Column - Current Car -->
-                <div class="car-display-section">
-                    <div class="car-card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-car"></i> CURRENT VEHICLE</h3>
-                        </div>
-                        <div class="car-image-container">
-                            <img id="current-car-image" src="images/cars/rusty_rider.jpg" alt="Current Car" class="car-image">
-                            <div class="car-overlay">
-                                <div class="car-info">
-                                    <h4 id="current-car-name">Rusty Rider</h4>
-                                    <p id="current-car-stats">Equipped • Ready to Race</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="car-status">
-                            <div class="status-item">
-                                <span class="status-label">Condition</span>
-                                <div class="condition-bar">
-                                    <div class="condition-fill" style="width: 100%;"></div>
-                                </div>
-                                <span class="condition-value" id="condition">100%</span>
-                            </div>
-                        </div>
+                <!-- Player Stats Summary -->
+                <div class="stats-summary-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-line"></i> STATS SUMMARY</h3>
                     </div>
-
-                    <!-- Player Stats Summary -->
-                    <div class="stats-summary-card">
-                        <div class="card-header">
-                            <h3><i class="fas fa-chart-line"></i> STATS SUMMARY</h3>
-                        </div>
-                        <div class="summary-grid">
-                            <div class="summary-item">
-                                <div class="summary-icon power">
-                                    <i class="fas fa-fist-raised"></i>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-icon power">
+                                <i class="fas fa-fist-raised"></i>
+                            </div>
+                            <div class="summary-info">
+                                <span class="summary-value" id="power">5</span>
+                                <span class="summary-label">Power</span>
+                                <!-- Progress Bar -->
+                                <div class="stat-bar-container">
+                                    <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                    <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                    <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;"></div>
                                 </div>
-                                <div class="summary-info">
-                                    <span class="summary-value" id="power">5</span>
-                                    <span class="summary-label">Power</span>
+
+
+
+                                <!-- Values Display -->
+
+                                <div class="stat-values">
+                                    <span class="base-value" data-stat="power">Base: 0</span>
+                                    <span class="bonus-value" data-stat="power"></span>
+                                    <span class="negative-value" data-stat="power"></span>
+                                    <span class="total-value" data-stat="power">Total: 0</span>
                                 </div>
                             </div>
+
+
                             <div class="summary-item">
                                 <div class="summary-icon speed">
                                     <i class="fas fa-bolt"></i>
@@ -113,8 +122,26 @@
                                 <div class="summary-info">
                                     <span class="summary-value" id="speed">5</span>
                                     <span class="summary-label">Speed</span>
+
+                                    <!-- Progress Bar -->
+                                    <div class="stat-bar-container">
+                                        <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;">
+                                        </div>
+                                    </div>
+
+                                    <!-- Values Display -->
+                                    <div class="stat-values">
+                                        <span class="base-value" data-stat="power">Base: 0</span>
+                                        <span class="bonus-value" data-stat="power"></span>
+                                        <span class="negative-value" data-stat="power"></span>
+                                        <span class="total-value" data-stat="power">Total: 0</span>
+                                    </div>
                                 </div>
                             </div>
+
+
                             <div class="summary-item">
                                 <div class="summary-icon dexterity">
                                     <i class="fas fa-bolt"></i>
@@ -122,8 +149,26 @@
                                 <div class="summary-info">
                                     <span class="summary-value" id="dexterity">5</span>
                                     <span class="summary-label">Dexterity</span>
+
+                                    <!-- Progress Bar -->
+                                    <div class="stat-bar-container">
+                                        <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;">
+                                        </div>
+                                    </div>
+
+                                    <!-- Values Display -->
+                                    <div class="stat-values">
+                                        <span class="base-value" data-stat="power">Base: 0</span>
+                                        <span class="bonus-value" data-stat="power"></span>
+                                        <span class="negative-value" data-stat="power"></span>
+                                        <span class="total-value" data-stat="power">Total: 0</span>
+                                    </div>
                                 </div>
                             </div>
+
+
                             <div class="summary-item">
                                 <div class="summary-icon structure">
                                     <i class="fas fa-bolt"></i>
@@ -131,8 +176,26 @@
                                 <div class="summary-info">
                                     <span class="summary-value" id="structure">5</span>
                                     <span class="summary-label">Structure</span>
+
+                                    <!-- Progress Bar -->
+                                    <div class="stat-bar-container">
+                                        <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;">
+                                        </div>
+                                    </div>
+
+                                    <!-- Values Display -->
+                                    <div class="stat-values">
+                                        <span class="base-value" data-stat="power">Base: 0</span>
+                                        <span class="bonus-value" data-stat="power"></span>
+                                        <span class="negative-value" data-stat="power"></span>
+                                        <span class="total-value" data-stat="power">Total: 0</span>
+                                    </div>
                                 </div>
                             </div>
+
+
                             <div class="summary-item">
                                 <div class="summary-icon handling">
                                     <i class="fas fa-compass"></i>
@@ -140,8 +203,26 @@
                                 <div class="summary-info">
                                     <span class="summary-value" id="handling">5</span>
                                     <span class="summary-label">Handling</span>
+
+                                    <!-- Progress Bar -->
+                                    <div class="stat-bar-container">
+                                        <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;">
+                                        </div>
+                                    </div>
+
+                                    <!-- Values Display -->
+                                    <div class="stat-values">
+                                        <span class="base-value" data-stat="power">Base: 0</span>
+                                        <span class="bonus-value" data-stat="power"></span>
+                                        <span class="negative-value" data-stat="power"></span>
+                                        <span class="total-value" data-stat="power">Total: 0</span>
+                                    </div>
                                 </div>
                             </div>
+
+
                             <div class="summary-item">
                                 <div class="summary-icon luck">
                                     <i class="fas fa-clover"></i>
@@ -149,10 +230,27 @@
                                 <div class="summary-info">
                                     <span class="summary-value" id="luck">5</span>
                                     <span class="summary-label">Luck</span>
+
+                                    <!-- Progress Bar -->
+                                    <div class="stat-bar-container">
+                                        <div class="stat-bar stat-bar-base" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-bonus" data-stat="power" style="width: 0%;"></div>
+                                        <div class="stat-bar stat-bar-negative" data-stat="power" style="width: 0%;">
+                                        </div>
+                                    </div>
+
+                                    <!-- Values Display -->
+                                    <div class="stat-values">
+                                        <span class="base-value" data-stat="power">Base: 0</span>
+                                        <span class="bonus-value" data-stat="power"></span>
+                                        <span class="negative-value" data-stat="power"></span>
+                                        <span class="total-value" data-stat="power">Total: 0</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
 
                 <!-- Right Column - Stats Upgrade -->
@@ -179,11 +277,11 @@
                                     </div>
                                 </div>
                                 <div class="stat-level">
-                                    <span class="level-value" id="power-display">5</span>
+                                    <span class="level-value" id="power-display">+</span>
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn power" onclick="upgradeStat('power')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -204,7 +302,7 @@
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn speed" onclick="upgradeStat('speed')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -225,7 +323,7 @@
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn dexterity" onclick="upgradeStat('dexterity')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -246,7 +344,7 @@
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn structure" onclick="upgradeStat('structure')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -267,7 +365,7 @@
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn handling" onclick="upgradeStat('handling')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -288,7 +386,7 @@
                                     <span class="level-label">LEVEL</span>
                                 </div>
                                 <button class="upgrade-btn luck" onclick="upgradeStat('luck')">
-                                    <span class="upgrade-cost">5</span>
+                                    <span class="upgrade-cost">1</span>
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -308,10 +406,13 @@
             </div>
         </div>
     </div>
+
+
     <div class="rest-section">
-    <!-- Rest content will be dynamically rendered -->
-</div>
+        <!-- Rest content will be dynamically rendered -->
+    </div>
 
     <script type="module" src="frontend.js"></script>
 </body>
+
 </html>

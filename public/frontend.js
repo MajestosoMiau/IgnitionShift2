@@ -42,6 +42,443 @@ const db = getFirestore(app);
 
 console.log("Firebase initialized successfully!");
 
+// Debug Firestore permissions
+window.testFirestorePermissions = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("No user logged in");
+        return;
+    }
+
+    console.log("=== TESTING FIRESTORE PERMISSIONS ===");
+    console.log("User ID:", user.uid);
+    console.log("User Email:", user.email);
+
+    try {
+        // Test 1: Try to read users collection
+        console.log("🔍 Testing READ permission...");
+        const usersQuery = query(collection(db, "users"), limit(1));
+        const usersSnapshot = await getDocs(usersQuery);
+        console.log("✅ READ permission: GRANTED");
+
+        // Test 2: Try to write to user's own document
+        console.log("📝 Testing WRITE permission...");
+        const testData = {
+            test: true,
+            timestamp: new Date().toISOString()
+        };
+        
+        await setDoc(doc(db, "users", user.uid), testData, { merge: true });
+        console.log("✅ WRITE permission: GRANTED");
+
+        // Test 3: Try to create a new document (simulate signup)
+        console.log("🆕 Testing CREATE permission...");
+        const testUserId = user.uid + "_test";
+        const newUserData = {
+            email: "test@test.com",
+            username: "testuser",
+            level: 1,
+            createdAt: serverTimestamp()
+        };
+        
+        await setDoc(doc(db, "users", testUserId), newUserData);
+        console.log("✅ CREATE permission: GRANTED");
+        
+        // Clean up test document
+        await deleteDoc(doc(db, "users", testUserId));
+        console.log("✅ DELETE permission: GRANTED");
+
+        console.log("🎉 ALL PERMISSIONS WORKING CORRECTLY!");
+
+    } catch (error) {
+        console.error("❌ Permission test failed:", error);
+        console.log("Error code:", error.code);
+        console.log("Error message:", error.message);
+        
+        if (error.code === 'permission-denied') {
+            console.log("🔒 FIRESTORE RULES ARE BLOCKING ACCESS");
+            console.log("Please check your Firestore security rules in Firebase Console");
+        }
+    }
+};
+
+// ========== SIGNUP FUNCTION ==========
+window.signup = async function(email, password) {
+    try {
+        console.log("Creating account for:", email);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        console.log("Signup successful:", userCredential.user);
+        
+        // Create initial player data in Firestore
+        await createNewPlayer(userCredential.user.uid, email);
+
+        // Wait a moment for Firestore to process the write
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        return userCredential.user;
+    } catch (error) {
+        console.error("Signup error:", error.code, error.message);
+        throw error;
+    }
+}
+
+// ========== SIGNUP HANDLER ==========
+window.handleSignup = async function() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const messageEl = document.getElementById('authMessage');
+    
+    if (!email || !password) {
+        if (messageEl) {
+            messageEl.textContent = "Please enter both email and password";
+            messageEl.style.color = "#ff6b6b";
+        }
+        return;
+    }
+    
+    if (password.length < 6) {
+        if (messageEl) {
+            messageEl.textContent = "Password must be at least 6 characters";
+            messageEl.style.color = "#ff6b6b";
+        }
+        return;
+    }
+    
+    try {
+        if (messageEl) {
+            messageEl.textContent = "Creating account...";
+            messageEl.style.color = "#00ffff";
+        }
+        
+        await signup(email, password);
+        
+        if (messageEl) {
+            messageEl.textContent = "Account created successfully!";
+            messageEl.style.color = "#00ff88";
+        }
+        
+        // Auto-login after successful signup with retry
+        setTimeout(async () => {
+            try {
+                await login(email, password);
+                if (messageEl) {
+                    messageEl.textContent = "Auto-login successful!";
+                    messageEl.style.color = "#00ff88";
+                }
+                
+                // Force reload player data after a short delay
+                setTimeout(() => {
+                    const user = auth.currentUser;
+                    if (user) {
+                        loadPlayerData(user.uid);
+                    }
+                }, 1500);
+                
+            } catch (error) {
+                if (messageEl) {
+                    messageEl.textContent = `Account created but login failed: ${error.message}`;
+                    messageEl.style.color = "#ff6b6b";
+                }
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error("Signup error:", error);
+        if (messageEl) {
+            messageEl.textContent = `Signup failed: ${error.message}`;
+            messageEl.style.color = "#ff6b6b";
+        }
+    }
+}
+
+// Debug function to check player data
+window.debugPlayerData = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("No user logged in");
+        return;
+    }
+    
+    console.log("=== DEBUG PLAYER DATA ===");
+    console.log("User ID:", user.uid);
+    console.log("User Email:", user.email);
+    
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            console.log("Firestore Data:", userData);
+            console.log("Inventory:", userData.inventory);
+            console.log("Stats:", userData.stats);
+        } else {
+            console.log("❌ No data in Firestore");
+        }
+    } catch (error) {
+        console.error("Debug error:", error);
+    }
+};
+
+// Debug image loading for inventory items
+window.debugInventoryImages = function() {
+    const inventoryItems = document.querySelectorAll('.inventory-item');
+    console.log(`🔍 Found ${inventoryItems.length} inventory items`);
+    
+    inventoryItems.forEach((item, index) => {
+        const itemId = item.getAttribute('data-item-id');
+        const itemType = item.getAttribute('data-item-type');
+        const img = item.querySelector('.item-preview-image');
+        
+        console.log(`Item ${index + 1}:`, {
+            id: itemId,
+            type: itemType,
+            currentSrc: img?.src,
+            visible: img?.style.display !== 'none'
+        });
+        
+        // Test what path would be generated
+        const testItem = { id: itemId, type: itemType };
+        const generatedPath = getInventoryImagePath(testItem);
+        console.log(`   Generated path: ${generatedPath}`);
+        
+        // Test if image exists
+        if (img) {
+            const testImg = new Image();
+            testImg.onload = function() {
+                console.log(`   ✅ Image exists: ${img.src}`);
+            };
+            testImg.onerror = function() {
+                console.log(`   ❌ Image missing: ${img.src}`);
+                
+                // Show fallbacks that would be tried
+                const fallbacks = generateImageFallbacks(itemId, itemType);
+                console.log(`   Fallbacks:`, fallbacks);
+            };
+            testImg.src = img.src;
+        }
+    });
+};
+
+// ========== AUTH STATE MANAGEMENT ==========
+onAuthStateChanged(auth, (user) => {
+    console.log("Auth state changed:", user);
+    if (user) {
+        console.log("User logged in:", user.email);
+        document.body.classList.add('player-logged-in');
+        document.body.classList.remove('player-logged-out');
+        loadPlayerData(user.uid);
+        initializeConditionRecovery();
+        initializePage();
+        updateNavbarAuthState();
+    } else {
+        console.log("User logged out");
+        document.body.classList.add('player-logged-out');
+        document.body.classList.remove('player-logged-in');
+        updateNavbarAuthState();
+    }
+});
+
+// Debug login function
+window.debugAuth = async function() {
+    const auth = getAuth();
+    console.log("Current auth state:", auth.currentUser);
+    console.log("Persisted auth:", await auth.currentUser?.getIdToken());
+};
+
+// Call this to check current state
+setTimeout(() => {
+    console.log("Checking initial auth state...");
+    window.debugAuth();
+}, 1000);
+
+// Enhanced login function (YOUR ORIGINAL)
+async function login(email, password) {
+    try {
+        console.log("Attempting login for:", email);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        console.log("Login successful:", userCredential.user);
+        return userCredential.user;
+    } catch (error) {
+        console.error("Login error:", error.code, error.message);
+        throw error;
+    }
+}
+
+// ========== LOGOUT FUNCTION ==========
+window.logout = function() {
+    signOut(auth).then(() => {
+        sessionStorage.removeItem("playerData");
+        // Force a page refresh to reset everything
+        window.location.reload();
+    }).catch((error) => {
+        console.error("Logout error:", error);
+    });
+}
+
+// ========== PLAYER DATA FUNCTIONS ==========
+async function loadPlayerData(userId) {
+    try {
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            console.log("Loaded user data:", userData);
+            updatePlayerUI(userData);
+        } else {
+            console.error("No user data found for:", userId);
+            // Try to create the player data if it doesn't exist
+            await createNewPlayer(userId, auth.currentUser?.email || "unknown");
+            console.log("Created missing player data, reloading...");
+            // Reload the data after creation
+            await loadPlayerData(userId);
+        }
+    } catch (error) {
+        console.error("Error loading player data:", error);
+        // Try one more time after a delay
+        setTimeout(async () => {
+            try {
+                const userRef = doc(db, "users", userId);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    updatePlayerUI(userData);
+                }
+            } catch (retryError) {
+                console.error("Retry failed:", retryError);
+            }
+        }, 2000);
+    }
+}
+
+// Player data functions (YOUR ORIGINAL)
+// ========== CREATE NEW PLAYER DATA ==========
+async function createNewPlayer(uid, email) {
+    try {
+        console.log("🔄 Creating player data for:", uid);
+        
+        const playerData = {
+            email: email,
+            username: email.split('@')[0],
+            level: 1,
+            xp: 0,
+            gold: 100,
+            tokens: 0,
+            fame: 0,
+            condition: 100,
+            lastConditionUpdate: serverTimestamp(),
+            stats: {
+                power: 5,
+                speed: 5,
+                dexterity: 5,
+                handling: 5,
+                structure: 5,
+                luck: 5
+            },
+            inventory: [
+                {
+                    id: "rusty_rider",
+                    type: "car",
+                    name: "Rusty Rider",
+                    equipped: true,
+                    rarity: "common",
+                    stats: {
+                        power: 3,
+                        speed: 2,
+                        structure: 2,
+                        dexterity: 1,
+                        handling: 1,
+                        luck: 0
+                    }
+                }
+            ],
+            trainingCooldowns: {},
+            trainingHistory: [],
+            createdAt: serverTimestamp()
+        };
+        
+        console.log("📦 Player data prepared:", playerData);
+        
+        // Try to create the document
+        await setDoc(doc(db, "users", uid), playerData);
+        console.log("✅ Player data created successfully for:", uid);
+        
+        return true;
+        
+    } catch (error) {
+        console.error("❌ Error creating player:", error);
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        
+        // Specific error handling
+        if (error.code === 'permission-denied') {
+            console.error("🔒 PERMISSION DENIED - Firestore rules are blocking");
+            alert("Firestore Permission Error: Cannot create player data. Please check security rules.");
+        } else if (error.code === 'not-found') {
+            console.error("🔍 COLLECTION NOT FOUND - Check if 'users' collection exists");
+        } else {
+            console.error("💥 UNKNOWN ERROR:", error);
+        }
+        
+        throw error;
+    }
+}
+
+// Enhanced update function for image paths
+window.updateOldPlayerData = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Please log in first");
+        return;
+    }
+
+    try {
+        console.log("🔄 Updating image paths for player:", user.uid);
+        
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            alert("No player data found");
+            return;
+        }
+        
+        const userData = userSnap.data();
+        const inventory = userData.inventory || [];
+        
+        console.log("📦 Current inventory:", inventory);
+        
+        // Update all items with proper image paths
+        const updatedInventory = inventory.map(item => {
+            const updatedItem = { ...item };
+            
+            // Always set imagePath using the new function
+            updatedItem.imagePath = getInventoryImagePath(item);
+            
+            console.log(`   ${item.type} ${item.id} -> ${updatedItem.imagePath}`);
+            
+            return updatedItem;
+        });
+        
+        await updateDoc(userRef, {
+            inventory: updatedInventory
+        });
+        
+        console.log("✅ Inventory updated with new image paths");
+        alert("Image paths updated! Refreshing...");
+        
+        // Reload to see changes
+        setTimeout(() => {
+            loadPlayerData(user.uid);
+        }, 1000);
+        
+    } catch (error) {
+        console.error("❌ Error updating image paths:", error);
+        alert("Error: " + error.message);
+    }
+}
+
 // ========== GLOBAL STATE ==========
 let currentPage = 1;
 let pageSize = 50;
@@ -797,86 +1234,87 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 1000);
 });
+
 // ========== PLAYER DATA FUNCTIONS ==========
-async function loadPlayerData(userId) {
-    try {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
-            console.log("Loaded user data:", userData);
-            updatePlayerUI(userData);
-        } else {
-            console.error("No user data found.");
-        }
-    } catch (error) {
-        console.error("Error loading player data:", error);
-    }
-}
-
 function updatePlayerUI(userData) {
-    const usernameElements = document.querySelectorAll('#username, #player-name');
-    usernameElements.forEach(element => {
-        if (element) element.textContent = userData.username || "Racer";
-    });
+    try {
+        // Check if userData is valid
+        if (!userData) {
+            console.error("No user data provided to updatePlayerUI");
+            return;
+        }
 
-    const playerNameNav = document.getElementById('player-name-nav');
-    if (playerNameNav) {
-        playerNameNav.textContent = userData.username || userData.email?.split('@')[0] || "Racer";
-    }
-    
-    const currentLevel = userData.level || 1;
-    const currentXP = userData.xp || 0;
-    const xpRequired = getXPRequired(currentLevel);
-    const xpProgress = Math.min(100, (currentXP / xpRequired) * 100);
-    
-    const stats = userData.stats || {};
-    const elements = {
-        "level": currentLevel,
-        "gold": userData.gold,
-        "tokens": userData.tokens,
-        "fame": userData.fame,
-        "xp": `${currentXP}/${xpRequired}`,
-        "condition": `${Math.floor(userData.condition || 100)}%`,
-        "shop-gold": userData.gold,
-        "power": stats.power,
-        "speed": stats.speed,
-        "dexterity": stats.dexterity,
-        "handling": stats.handling,
-        "structure": stats.structure,
-        "luck": stats.luck,
-        "power-display": stats.power,
-        "speed-display": stats.speed,
-        "dexterity-display": stats.dexterity,
-        "handling-display": stats.handling,
-        "structure-display": stats.structure,
-        "luck-display": stats.luck
-    };
-    
-    for (const [id, value] of Object.entries(elements)) {
-        const element = document.getElementById(id);
-        if (element) element.textContent = value !== undefined ? value : 0;
-    }
-    
-    const xpBar = document.getElementById('xp-progress-bar');
-    if (xpBar) xpBar.style.width = `${xpProgress}%`;
-    
-    updateCarInfo(userData);
-    
-    if (document.getElementById("activity-type")) {
-        document.getElementById("activity-type").textContent = 
-            `Ready to race! | Gold: ${userData.gold || 0} | Level: ${userData.level || 1}`;
-    }
-    
-    updateEquipmentDisplay(userData);
-    updateUpgradeButtons();
-    
-    if (userData.inventory && document.getElementById('inventory-grid')) {
-        displayInventory(userData.inventory);
-    }
+        console.log("Updating UI with:", userData);
 
-    updateEnhancedStatsDisplay(userData);
+        const usernameElements = document.querySelectorAll('#username, #player-name');
+        usernameElements.forEach(element => {
+            if (element) element.textContent = userData.username || "Racer";
+        });
+
+        const playerNameNav = document.getElementById('player-name-nav');
+        if (playerNameNav) {
+            playerNameNav.textContent = userData.username || userData.email?.split('@')[0] || "Racer";
+        }
+        
+        const currentLevel = userData.level || 1;
+        const currentXP = userData.xp || 0;
+        const xpRequired = getXPRequired(currentLevel);
+        const xpProgress = Math.min(100, (currentXP / xpRequired) * 100);
+        
+        const stats = userData.stats || {};
+        const elements = {
+            "level": currentLevel,
+            "gold": userData.gold || 0,
+            "tokens": userData.tokens || 0,
+            "fame": userData.fame || 0,
+            "xp": `${currentXP}/${xpRequired}`,
+            "condition": `${Math.floor(userData.condition || 100)}%`,
+            "shop-gold": userData.gold || 0,
+            "power": stats.power || 10,
+            "speed": stats.speed || 10,
+            "dexterity": stats.dexterity || 10,
+            "handling": stats.handling || 10,
+            "structure": stats.structure || 10,
+            "luck": stats.luck || 10,
+            "power-display": stats.power || 10,
+            "speed-display": stats.speed || 10,
+            "dexterity-display": stats.dexterity || 10,
+            "handling-display": stats.handling || 10,
+            "structure-display": stats.structure || 10,
+            "luck-display": stats.luck || 10
+        };
+        
+        for (const [id, value] of Object.entries(elements)) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            } else {
+                console.warn(`Element with id '${id}' not found`);
+            }
+        }
+        
+        const xpBar = document.getElementById('xp-progress-bar');
+        if (xpBar) xpBar.style.width = `${xpProgress}%`;
+        
+        updateCarInfo(userData);
+        
+        if (document.getElementById("activity-type")) {
+            document.getElementById("activity-type").textContent = 
+                `Ready to race! | Gold: ${userData.gold || 0} | Level: ${userData.level || 1}`;
+        }
+        
+        updateEquipmentDisplay(userData);
+        updateUpgradeButtons();
+        
+        if (userData.inventory && document.getElementById('inventory-grid')) {
+            displayInventory(userData.inventory);
+        }
+
+        updateEnhancedStatsDisplay(userData);
+        
+    } catch (error) {
+        console.error("Error in updatePlayerUI:", error);
+    }
 }
 
 function updateCarInfo(userData) {
@@ -953,6 +1391,7 @@ function updateEquipmentDisplay(userData) {
     
     // Update other equipped items display
     updateEquippedItemsDisplay(userData.inventory);
+    
 }
 
 // FIXED: Display all equipped items in the right panel (KEEP THIS ONE - REMOVE THE DUPLICATE BELOW)
@@ -1032,17 +1471,24 @@ window.handleEquippedImageError = function(imgElement, itemId, itemType) {
 
 function tryNextFallback(imgElement, fallbacks, index) {
     if (index >= fallbacks.length) {
-        console.log('All fallback images failed');
+        console.log('❌ All image fallbacks failed for:', imgElement.alt);
         return;
     }
     
     const nextSrc = fallbacks[index];
-    console.log(`Trying fallback ${index + 1}: ${nextSrc}`);
+    console.log(`🔄 Trying fallback ${index + 1}/${fallbacks.length}: ${nextSrc}`);
     
     const testImg = new Image();
     testImg.onload = function() {
         console.log(`✅ Fallback image found: ${nextSrc}`);
         imgElement.src = nextSrc;
+        imgElement.style.display = 'block';
+        
+        // Hide the fallback icon if it was shown
+        const fallbackIcon = imgElement.nextElementSibling;
+        if (fallbackIcon && fallbackIcon.classList.contains('item-fallback-icon')) {
+            fallbackIcon.style.display = 'none';
+        }
     };
     testImg.onerror = function() {
         tryNextFallback(imgElement, fallbacks, index + 1);
@@ -2007,6 +2453,8 @@ window.upgradeStat = async function(statName) {
     } catch (error) {
         alert('Error upgrading stat: ' + error.message);
     }
+
+    
 }
 
 function initializeGarage() {
@@ -2149,9 +2597,9 @@ function displayInventory(items) {
     updateInventoryFilters();
 }
 
-// NEW: Handle inventory image errors properly
+// Enhanced image error handler with multiple fallbacks
 window.handleInventoryImageError = function(imgElement, itemId, itemType) {
-    console.log(`Inventory image failed: ${imgElement.src}`);
+    console.log(`🖼️ Image failed: ${imgElement.src}`);
     
     const fallbackIcon = imgElement.nextElementSibling;
     if (fallbackIcon && fallbackIcon.classList.contains('item-fallback-icon')) {
@@ -2159,43 +2607,77 @@ window.handleInventoryImageError = function(imgElement, itemId, itemType) {
         fallbackIcon.style.display = 'flex';
     }
     
-    // Try fallback images
-    const fallbacks = [
-        `images/${itemType}s/${itemId}.jpg`,
-        `images/${itemType}s/${itemId.toLowerCase().replace(/ /g, '_')}.jpg`,
-        `images/${itemType}s/${itemId.toLowerCase().replace(/ /g, '-')}.jpg`,
-        `images/cars/${itemId}.jpg`,
-        `images/cars/${itemId.toLowerCase().replace(/ /g, '_')}.jpg`,
-        `images/cars/${itemId.toLowerCase().replace(/ /g, '-')}.jpg`
-    ];
-    
+    // Try multiple fallback patterns
+    const fallbacks = generateImageFallbacks(itemId, itemType);
     tryNextFallback(imgElement, fallbacks, 0);
 };
 
-// FIXED: Inventory image path resolver
-function getInventoryImagePath(item) {
-    // For cars, use the car images directory
-    if (item.type === 'car') {
-        const patterns = [
-            `images/cars/${item.id}.jpg`,
-            `images/cars/${item.id.toLowerCase().replace(/ /g, '_')}.jpg`,
-            `images/cars/${item.id.toLowerCase().replace(/ /g, '-')}.jpg`,
+// Generate multiple fallback image paths
+function generateImageFallbacks(itemId, itemType) {
+    const baseId = itemId.toLowerCase().replace(/ /g, '_');
+    const fallbacks = [];
+    
+    if (itemType === 'car') {
+        fallbacks.push(
+            `images/cars/${baseId}.jpg`,
+            `images/cars/${baseId}.png`,
+            `images/cars/${itemId}.jpg`,
+            `images/cars/${itemId}.png`,
+            `images/cars/${baseId.replace(/_/g, '-')}.jpg`,
             `images/cars/default_car.jpg`,
             'images/cars/rusty_rider.jpg'
+        );
+    } else {
+        const typeFolder = `${itemType}s`;
+        fallbacks.push(
+            `images/${typeFolder}/${baseId}.jpg`,
+            `images/${typeFolder}/${baseId}.png`,
+            `images/${typeFolder}/${itemId}.jpg`,
+            `images/${typeFolder}/${itemId}.png`,
+            `images/${typeFolder}/${baseId.replace(/_/g, '-')}.jpg`,
+            `images/${typeFolder}/default_${itemType}.jpg`,
+            `images/cars/default_car.jpg`
+        );
+    }
+    
+    return fallbacks.filter((path, index, self) => self.indexOf(path) === index); // Remove duplicates
+}
+// FIXED: Enhanced inventory image path resolver
+function getInventoryImagePath(item) {
+    if (!item) return 'images/cars/default_car.jpg';
+    
+    // For cars, use the car images directory
+    if (item.type === 'car') {
+        const carId = item.id.toLowerCase().replace(/ /g, '_');
+        const patterns = [
+            `images/cars/${carId}.jpg`,
+            `images/cars/${carId}.png`,
+            `images/cars/${item.id}.jpg`,
+            `images/cars/${item.id}.png`,
+            `images/cars/default_car.jpg`,
+            'images/cars/rusty_rider.jpg' // Ultimate fallback
+        ];
+        return patterns[0]; // Return the first pattern (will try others via onerror)
+    }
+    
+    // For other item types, use their respective directories
+    if (item.type) {
+        const itemId = item.id.toLowerCase().replace(/ /g, '_');
+        const typeFolder = `${item.type}s`; // engines, tires, turbos, etc.
+        
+        const patterns = [
+            `images/${typeFolder}/${itemId}.jpg`,
+            `images/${typeFolder}/${itemId}.png`,
+            `images/${typeFolder}/${item.id}.jpg`,
+            `images/${typeFolder}/${item.id}.png`,
+            `images/${typeFolder}/default_${item.type}.jpg`,
+            `images/cars/default_car.jpg` // Ultimate fallback
         ];
         return patterns[0];
     }
     
-    // For other item types, use their respective directories
-    const patterns = [
-        `images/${item.type}s/${item.id}.jpg`,
-        `images/${item.type}s/${item.id.toLowerCase().replace(/ /g, '_')}.jpg`,
-        `images/${item.type}s/${item.id.toLowerCase().replace(/ /g, '-')}.jpg`,
-        `images/${item.type}s/default_${item.type}.jpg`,
-        `images/cars/default_car.jpg` // Ultimate fallback
-    ];
-    
-    return patterns[0];
+    // Ultimate fallback
+    return 'images/cars/default_car.jpg';
 }
 
 function formatItemType(type) {
@@ -2957,12 +3439,18 @@ window.claimChallengeReward = async function(challengeId) {
 };
 
 // ========== PVP CHALLENGES DISPLAY ==========
+// ========== PVP CHALLENGES DISPLAY ==========
 async function loadPVPChallenges() {
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+        console.log("No user logged in, skipping PVP challenges load");
+        return;
+    }
 
     try {
-        // Get pending challenges for current user
+        console.log("Loading PVP challenges for user:", user.uid);
+        
+        // Only load challenges where current user is the target
         const challengesQuery = query(
             collection(db, "challenges"),
             where("targetId", "==", user.uid),
@@ -2973,15 +3461,77 @@ async function loadPVPChallenges() {
         const challenges = [];
         
         snapshot.forEach(doc => {
-            challenges.push({
-                id: doc.id,
-                ...doc.data()
-            });
+            const challengeData = doc.data();
+            // Check if challenge is still valid (not expired)
+            if (challengeData.expiresAt) {
+                const expiresAt = challengeData.expiresAt.toDate();
+                if (expiresAt > new Date()) {
+                    challenges.push({
+                        id: doc.id,
+                        ...challengeData
+                    });
+                } else {
+                    // Auto-mark as expired if we find an expired challenge
+                    markChallengeAsExpired(doc.id);
+                }
+            }
         });
         
+        console.log(`Found ${challenges.length} valid PVP challenges`);
         displayPVPChallenges(challenges);
     } catch (error) {
         console.error('Error loading PVP challenges:', error);
+        showPVPError(error);
+    }
+}
+
+// Remove the problematic cleanupExpiredChallenges function and replace with:
+async function markChallengeAsExpired(challengeId) {
+    try {
+        await updateDoc(doc(db, "challenges", challengeId), {
+            status: 'expired',
+            expiredAt: serverTimestamp()
+        });
+        console.log(`Marked challenge ${challengeId} as expired`);
+    } catch (error) {
+        console.error('Error marking challenge as expired:', error);
+    }
+}
+
+// Simple cleanup for user's own challenges only
+async function cleanupUserChallenges() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        // Only clean up challenges where user is involved
+        const userChallengesQuery = query(
+            collection(db, "challenges"),
+            where("status", "==", "pending"),
+            where("targetId", "==", user.uid) // Only challenges targeting current user
+        );
+        
+        const snapshot = await getDocs(userChallengesQuery);
+        
+        const cleanupPromises = [];
+        snapshot.forEach(doc => {
+            const challenge = doc.data();
+            if (challenge.expiresAt && challenge.expiresAt.toDate() <= new Date()) {
+                cleanupPromises.push(
+                    updateDoc(doc.ref, {
+                        status: 'expired',
+                        expiredAt: serverTimestamp()
+                    })
+                );
+            }
+        });
+        
+        if (cleanupPromises.length > 0) {
+            await Promise.all(cleanupPromises);
+            console.log(`Cleaned up ${cleanupPromises.length} expired user challenges`);
+        }
+    } catch (error) {
+        console.error('Error in cleanupUserChallenges:', error);
     }
 }
 
@@ -2989,33 +3539,55 @@ function displayPVPChallenges(challenges) {
     const challengesContainer = document.getElementById('pvp-challenges');
     if (!challengesContainer) return;
     
-    if (challenges.length === 0) {
+    const user = auth.currentUser;
+    
+    // Filter to show only challenges where current user is the target
+    const incomingChallenges = challenges.filter(challenge => challenge.targetId === user.uid);
+    
+    if (incomingChallenges.length === 0) {
         challengesContainer.innerHTML = `
             <div class="no-challenges">
                 <i class="fas fa-flag-checkered"></i>
                 <p>No pending challenges</p>
+                <small>Challenge other players from the Rankings page!</small>
             </div>
         `;
         return;
     }
     
-    const challengesHTML = challenges.map(challenge => {
+    const challengesHTML = incomingChallenges.map(challenge => {
         const timeLeft = Math.max(0, Math.floor((challenge.expiresAt.toDate() - new Date()) / 60000));
+        const minutes = Math.floor(timeLeft);
+        const hours = Math.floor(minutes / 60);
+        const displayTime = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
         
         return `
             <div class="challenge-item">
                 <div class="challenge-header">
                     <h4>🏁 Challenge from ${challenge.challengerName}</h4>
-                    <span class="time-left">${timeLeft}m left</span>
+                    <span class="time-left ${timeLeft < 5 ? 'expiring' : ''}">${displayTime} left</span>
                 </div>
                 <div class="challenge-details">
-                    <div>Level: ${challenge.challengerLevel} vs Your: ${challenge.targetLevel || 1}</div>
-                    <div>Bet: ${challenge.betAmount} gold</div>
-                    <div>Condition cost: ${challenge.conditionCost}%</div>
+                    <div class="challenge-detail">
+                        <span class="label">Level:</span>
+                        <span class="value">${challenge.challengerLevel} vs ${challenge.targetLevel || 1}</span>
+                    </div>
+                    <div class="challenge-detail">
+                        <span class="label">Bet Amount:</span>
+                        <span class="value">${challenge.betAmount} gold</span>
+                    </div>
+                    <div class="challenge-detail">
+                        <span class="label">Condition Cost:</span>
+                        <span class="value">${challenge.conditionCost}%</span>
+                    </div>
+                    <div class="challenge-detail">
+                        <span class="label">Track:</span>
+                        <span class="value">${challenge.track?.name || 'Random Track'}</span>
+                    </div>
                 </div>
                 <div class="challenge-actions">
                     <button class="accept-btn" onclick="acceptChallenge('${challenge.id}')">
-                        ✅ Accept
+                        ✅ Accept Challenge
                     </button>
                     <button class="decline-btn" onclick="declineChallenge('${challenge.id}')">
                         ❌ Decline
@@ -3028,21 +3600,385 @@ function displayPVPChallenges(challenges) {
     challengesContainer.innerHTML = challengesHTML;
 }
 
+// Enhanced decline challenge function
 window.declineChallenge = async function(challengeId) {
-    if (confirm('Decline this challenge?')) {
-        try {
-            await updateDoc(doc(db, "challenges", challengeId), {
-                status: 'declined',
-                declinedAt: serverTimestamp()
-            });
-            
-            alert('Challenge declined.');
-            loadPVPChallenges(); // Refresh the list
-        } catch (error) {
-            alert('Error declining challenge: ' + error.message);
-        }
+    if (!confirm('Are you sure you want to decline this challenge?')) return;
+
+    try {
+        await updateDoc(doc(db, "challenges", challengeId), {
+            status: 'declined',
+            declinedAt: serverTimestamp(),
+            declinedBy: auth.currentUser.uid
+        });
+        
+        alert('Challenge declined.');
+        loadPVPChallenges(); // Refresh the list
+    } catch (error) {
+        console.error('Error declining challenge:', error);
+        alert('Error declining challenge: ' + error.message);
     }
 };
+
+// Add function to clean up expired challenges
+async function cleanupExpiredChallenges() {
+    try {
+        const challengesQuery = query(
+            collection(db, "challenges"),
+            where("status", "==", "pending"),
+            where("expiresAt", "<=", new Date())
+        );
+        
+        const snapshot = await getDocs(challengesQuery);
+        const cleanupPromises = [];
+        
+        snapshot.forEach(doc => {
+            cleanupPromises.push(
+                updateDoc(doc.ref, {
+                    status: 'expired',
+                    expiredAt: serverTimestamp()
+                })
+            );
+        });
+        
+        await Promise.all(cleanupPromises);
+        if (cleanupPromises.length > 0) {
+            console.log(`Cleaned up ${cleanupPromises.length} expired challenges`);
+        }
+    } catch (error) {
+        console.error('Error cleaning up expired challenges:', error);
+    }
+}
+
+// ========STAT BARS =========
+function updateStatBars() {
+    const stats = ['power', 'speed', 'dexterity', 'structure', 'handling', 'luck'];
+    
+    stats.forEach(stat => {
+        const baseValue = parseInt(document.getElementById(`${stat}`).textContent) || 0;
+        const bonusValue = 0; // This should come from your equipped items data
+        const negativeValue = 0; // This should come from your negative effects data
+        
+        const totalValue = baseValue + bonusValue + negativeValue;
+        
+        // Calculate percentages
+        const basePercent = totalValue > 0 ? (baseValue / totalValue) * 100 : 0;
+        const bonusPercent = totalValue > 0 ? (bonusValue / totalValue) * 100 : 0;
+        const negativePercent = totalValue > 0 ? (Math.abs(negativeValue) / totalValue) * 100 : 0;
+        
+        // Update the bars
+        const baseBar = document.querySelector(`.stat-upgrade-item .stat-bar-base[data-stat="${stat}"]`);
+        const bonusBar = document.querySelector(`.stat-upgrade-item .stat-bar-bonus[data-stat="${stat}"]`);
+        const negativeBar = document.querySelector(`.stat-upgrade-item .stat-bar-negative[data-stat="${stat}"]`);
+        
+        if (baseBar) baseBar.style.width = `${basePercent}%`;
+        if (bonusBar) bonusBar.style.width = `${bonusPercent}%`;
+        if (negativeBar) negativeBar.style.width = `${negativePercent}%`;
+        
+        // Update values display
+        const baseValueEl = document.querySelector(`.base-value[data-stat="${stat}"]`);
+        const bonusValueEl = document.querySelector(`.bonus-value[data-stat="${stat}"]`);
+        const negativeValueEl = document.querySelector(`.negative-value[data-stat="${stat}"]`);
+        const totalValueEl = document.querySelector(`.total-value[data-stat="${stat}"]`);
+        
+        if (baseValueEl) baseValueEl.textContent = `Base: ${baseValue}`;
+        if (bonusValueEl) bonusValueEl.textContent = bonusValue > 0 ? `+${bonusValue}` : '';
+        if (negativeValueEl) negativeValueEl.textContent = negativeValue < 0 ? `${negativeValue}` : '';
+        if (totalValueEl) totalValueEl.textContent = `Total: ${totalValue}`;
+    });
+
+   
+}
+
+// Player Listings Functions
+class PlayerListings {
+    constructor() {
+        this.listings = [];
+        this.filters = {
+            category: 'all',
+            sort: 'newest',
+            search: ''
+        };
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.loadListings();
+    }
+
+    setupEventListeners() {
+        // Search and filter
+        document.getElementById('listing-search').addEventListener('input', (e) => {
+            this.filters.search = e.target.value;
+            this.filterListings();
+        });
+
+        document.getElementById('category-filter').addEventListener('change', (e) => {
+            this.filters.category = e.target.value;
+            this.filterListings();
+        });
+
+        document.getElementById('sort-filter').addEventListener('change', (e) => {
+            this.filters.sort = e.target.value;
+            this.sortListings();
+        });
+
+        // Create listing
+        document.getElementById('create-listing-btn').addEventListener('click', () => {
+            this.showCreateListingModal();
+        });
+
+        document.getElementById('create-listing-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.createListing();
+        });
+    }
+
+    async loadListings() {
+        try {
+            // Load active listings from Firebase
+            const listingsRef = collection(db, 'marketplace/playerListings');
+            const q = query(listingsRef, where('status', '==', 'active'));
+            const querySnapshot = await getDocs(q);
+            
+            this.listings = [];
+            querySnapshot.forEach((doc) => {
+                this.listings.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+
+            this.renderListings();
+        } catch (error) {
+            console.error('Error loading listings:', error);
+        }
+    }
+
+    renderListings() {
+        const grid = document.getElementById('listings-grid');
+        const noListings = document.getElementById('no-listings');
+        const count = document.getElementById('listings-count');
+
+        if (this.listings.length === 0) {
+            grid.innerHTML = '';
+            noListings.style.display = 'block';
+            count.textContent = '0';
+            return;
+        }
+
+        noListings.style.display = 'none';
+        count.textContent = this.listings.length.toString();
+
+        grid.innerHTML = this.listings.map(listing => `
+            <div class="listing-item" data-listing-id="${listing.id}">
+                <div class="seller-info">
+                    <div class="seller-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <span class="seller-name">${listing.sellerName}</span>
+                    <div class="seller-rating">
+                        <i class="fas fa-star"></i> ${listing.sellerRating || 'New'}
+                    </div>
+                </div>
+                <div class="listing-image">
+                    <img src="images/cars/${listing.itemData.image || 'default.jpg'}" alt="${listing.itemData.name}">
+                </div>
+                <div class="listing-info">
+                    <h4>${listing.itemData.name}</h4>
+                    <p>Level ${listing.itemData.minLevel} • ${this.formatItemType(listing.itemType)}</p>
+                    <div class="listing-stats">
+                        ${this.renderItemStats(listing.itemData)}
+                    </div>
+                    <div class="listing-price">
+                        <span class="price">${this.formatPrice(listing.price)}</span>
+                        <span class="currency">gold</span>
+                    </div>
+                    <div class="listing-time">
+                        <i class="fas fa-clock"></i> ${this.formatTimeLeft(listing.endTime)}
+                    </div>
+                </div>
+                <div class="listing-actions">
+                    ${this.canBuy(listing) ? `
+                        <button class="buyout-btn" onclick="playerListings.buyListing('${listing.id}')">
+                            Buy Now
+                        </button>
+                    ` : `
+                        <button class="buyout-btn disabled" disabled>
+                            Level ${listing.itemData.minLevel} Required
+                        </button>
+                    `}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    filterListings() {
+        let filtered = this.listings;
+
+        // Category filter
+        if (this.filters.category !== 'all') {
+            filtered = filtered.filter(listing => listing.itemType === this.filters.category);
+        }
+
+        // Search filter
+        if (this.filters.search) {
+            const searchTerm = this.filters.search.toLowerCase();
+            filtered = filtered.filter(listing => 
+                listing.itemData.name.toLowerCase().includes(searchTerm) ||
+                listing.sellerName.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        this.sortListings(filtered);
+    }
+
+    sortListings(listings = this.listings) {
+        switch (this.filters.sort) {
+            case 'price-low':
+                listings.sort((a, b) => a.price - b.price);
+                break;
+            case 'price-high':
+                listings.sort((a, b) => b.price - a.price);
+                break;
+            case 'ending':
+                listings.sort((a, b) => a.endTime - b.endTime);
+                break;
+            default: // newest
+                listings.sort((a, b) => b.createdAt - a.createdAt);
+        }
+
+        this.renderListings();
+    }
+
+    async showCreateListingModal() {
+        await this.populateItemSelect();
+        document.getElementById('create-listing-modal').style.display = 'block';
+    }
+
+    async populateItemSelect() {
+        const select = document.getElementById('item-select');
+        // This would load from user's inventory
+        // For now, placeholder
+        select.innerHTML = `
+            <option value="">Choose an item...</option>
+            <option value="car_1" data-type="vehicle">Sports Coupe</option>
+            <option value="engine_1" data-type="engine">Turbo Engine</option>
+        `;
+    }
+
+    async createListing() {
+        const form = document.getElementById('create-listing-form');
+        const formData = new FormData(form);
+        
+        const listingData = {
+            sellerId: currentUser.uid,
+            sellerName: currentUser.displayName,
+            itemType: document.getElementById('item-select').selectedOptions[0].dataset.type,
+            itemId: formData.get('item'),
+            itemData: this.getItemData(formData.get('item')),
+            price: parseInt(formData.get('price')),
+            endTime: Date.now() + (parseInt(formData.get('duration')) * 1000),
+            createdAt: Date.now(),
+            status: 'active'
+        };
+
+        try {
+            const docRef = await addDoc(collection(db, 'marketplace/playerListings'), listingData);
+            console.log('Listing created:', docRef.id);
+            this.closeModal();
+            this.loadListings(); // Refresh listings
+        } catch (error) {
+            console.error('Error creating listing:', error);
+        }
+    }
+
+    async buyListing(listingId) {
+        const listing = this.listings.find(l => l.id === listingId);
+        if (!listing) return;
+
+        // Check if user has enough gold
+        if (currentUser.gold < listing.price) {
+            alert('Not enough gold!');
+            return;
+        }
+
+        try {
+            // Update listing status
+            await updateDoc(doc(db, 'marketplace/playerListings', listingId), {
+                status: 'sold',
+                soldTo: currentUser.uid,
+                soldAt: Date.now()
+            });
+
+            // Transfer gold (you'd need a transaction here)
+            // Add item to buyer's inventory
+            // Remove item from seller's inventory
+
+            alert('Purchase successful!');
+            this.loadListings(); // Refresh
+        } catch (error) {
+            console.error('Error buying listing:', error);
+        }
+    }
+
+    // Helper functions
+    formatPrice(price) {
+        return price.toLocaleString();
+    }
+
+    formatTimeLeft(endTime) {
+        const timeLeft = endTime - Date.now();
+        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+        return hours > 24 ? `${Math.floor(hours / 24)}d left` : `${hours}h left`;
+    }
+
+    canBuy(listing) {
+        return currentUser.level >= listing.itemData.minLevel;
+    }
+
+    formatItemType(type) {
+        const types = {
+            vehicle: 'Vehicle',
+            engine: 'Engine',
+            part: 'Part',
+            cosmetic: 'Cosmetic'
+        };
+        return types[type] || type;
+    }
+
+    renderItemStats(itemData) {
+        // This would render stats based on item type
+        if (itemData.power) return `<span>Power: ${itemData.power}</span>`;
+        if (itemData.speed) return `<span>Speed: ${itemData.speed}</span>`;
+        return '';
+    }
+
+    getItemData(itemId) {
+        // This would fetch actual item data from your items collection
+        // Placeholder
+        return {
+            name: "Sports Coupe",
+            minLevel: 5,
+            power: 45,
+            speed: 60,
+            image: "sports_coupe.jpg"
+        };
+    }
+
+    closeModal() {
+        document.getElementById('create-listing-modal').style.display = 'none';
+        document.getElementById('create-listing-form').reset();
+    }
+}
+
+// Initialize
+let playerListings;
+document.addEventListener('DOMContentLoaded', () => {
+    playerListings = new PlayerListings();
+});
+
+// Call this whenever stats change (after upgrades, equipment changes, etc.)---
 
 // ========== APPLICATION INITIALIZATION ==========
 function initializePage() {
@@ -3053,54 +3989,50 @@ function initializePage() {
     else if (path.includes('training.html')) initializeTraining();
     else if (document.getElementById('inventory-grid')) initializeInventory();
 
-     loadDailyChallenges();
-       loadPVPChallenges();
+    // Load challenges with error handling
+    setTimeout(() => {
+        loadDailyChallenges().catch(console.error);
+        loadPVPChallenges().catch(console.error);
+        cleanupExpiredChallenges().catch(console.error);
+    }, 1000);
     
     // Refresh challenges every 30 seconds
     setInterval(loadPVPChallenges, 30000);
-}
-
-function onLoginSuccess(userData) {
-    const authSection = document.getElementById('auth-section');
-    const guestContent = document.getElementById('guest-content');
-    const playerView = document.getElementById('player-view');
-    
-    if (authSection) authSection.style.display = 'none';
-    if (guestContent) guestContent.style.display = 'none';
-    if (playerView) playerView.style.display = 'block';
-    
-    updatePlayerUI(userData);
-    if (userData.inventory) displayInventory(userData.inventory);
-    initializeConditionRecovery();
-}
-
-function onLogout() {
-    const authSection = document.getElementById('auth-section');
-    const guestContent = document.getElementById('guest-content');
-    const playerView = document.getElementById('player-view');
-    
-    if (authSection) authSection.style.display = 'block';
-    if (guestContent) guestContent.style.display = 'block';
-    if (playerView) playerView.style.display = 'none';
+    setInterval(cleanupExpiredChallenges, 60000);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM loaded, initializing application...");
-    loadNavbar();
+    loadNavbar();    
     
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            console.log("User logged in:", user.uid);
-            loadPlayerData(user.uid);
-            initializeConditionRecovery();
-            initializePage();
-            onLoginSuccess({});
-        } else {
-            console.log("User logged out");
-            onLogout();
-        }
-    });
+    // Set up login form event listener
+    const authForm = document.getElementById('authForm');
+    if (authForm) {
+        authForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageEl = document.getElementById('authMessage');
+            
+            login(email, password)
+                .then(() => {
+                    if (messageEl) {
+                        messageEl.textContent = "Login successful!";
+                        messageEl.style.color = "#00ff88";
+                    }
+                })
+                .catch(error => {
+                    if (messageEl) {
+                        messageEl.textContent = `Error: ${error.message}`;
+                        messageEl.style.color = "#ff6b6b";
+                    }
+                });
+        });
+    }
+    
+    
 });
+
 
 // ========== GLOBAL FUNCTION EXPORTS ==========
 window.loadPlayerData = loadPlayerData;
@@ -3114,6 +4046,8 @@ window.selectTrack = selectTrack;
 window.equipItem = equipItem;
 window.unequipItem = unequipItem;
 window.sellInventoryItem = sellInventoryItem;
+window.handleSignup = handleSignup;
+window.signup = signup;
 
 // ========== CSS STYLES ==========
 const style = document.createElement('style');

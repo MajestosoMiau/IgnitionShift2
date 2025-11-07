@@ -152,29 +152,34 @@
         </div>
 
         <!-- AUTH SECTION (Visible when logged out) -->
-        <div class="auth-section" id="auth-section">
-            <div class="auth-container">
-                <h2><i class="fas fa-racing-flag"></i> Start Your Engine</h2>
-                <form id="authForm">
-                    <div class="form-group">
-                        <input type="email" id="email" placeholder="Enter your email" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="password" id="password" placeholder="Create your password" required>
-                    </div>
-                    <button type="submit" class="auth-btn">
-                        <i class="fas fa-play"></i> Launch Career
-                    </button>
-                </form>
-                <p id="authMessage"></p>
-                
-                <div class="auth-features">
-                    <p><i class="fas fa-bolt"></i> Instant Access</p>
-                    <p><i class="fas fa-shield-alt"></i> Secure & Private</p>
-                    <p><i class="fas fa-trophy"></i> Start Competing Immediately</p>
-                </div>
+<div class="auth-section" id="auth-section">
+    <div class="auth-container">
+        <h2><i class="fas fa-racing-flag"></i> Start Your Engine</h2>
+        <form id="authForm">
+            <div class="form-group">
+                <input type="email" id="email" placeholder="Enter your email" required>
             </div>
+            <div class="form-group">
+                <input type="password" id="password" placeholder="Create your password" required>
+            </div>
+            <div class="auth-buttons">
+                <button type="submit" class="auth-btn login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                <button type="button" class="auth-btn signup-btn" onclick="handleSignup()">
+                    <i class="fas fa-user-plus"></i> Sign Up
+                </button>
+            </div>
+        </form>
+        <p id="authMessage"></p>
+        
+        <div class="auth-features">
+            <p><i class="fas fa-bolt"></i> Instant Access</p>
+            <p><i class="fas fa-shield-alt"></i> Secure & Private</p>
+            <p><i class="fas fa-trophy"></i> Start Competing Immediately</p>
         </div>
+    </div>
+</div>
 
         <!-- GALLERY & NEWS (Visible when logged out) -->
         <div class="guest-content" id="guest-content">

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Marketplace</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <div id="navbar-container"></div>
+
+   <!-- Player Trading Tab Content -->
+<div class="market-tab-content" id="player-trading-content">
+    <div class="trading-controls">
+        <div class="search-filter">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search vehicles, parts..." class="search-input" id="listing-search">
+            </div>
+            <select class="category-filter" id="category-filter">
+                <option value="all">All Categories</option>
+                <option value="vehicle">Vehicles</option>
+                <option value="engine">Engines</option>
+                <option value="part">Parts</option>
+                <option value="cosmetic">Cosmetics</option>
+            </select>
+            <select class="sort-filter" id="sort-filter">
+                <option value="newest">Newest First</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="ending">Ending Soon</option>
+            </select>
+        </div>
+        <button class="create-listing-btn" id="create-listing-btn">
+            <i class="fas fa-plus"></i> Create Listing
+        </button>
+    </div>
+    
+    <div class="listings-container">
+        <div class="listings-stats">
+            <span id="listings-count">0</span> active listings
+        </div>
+        <div class="listings-grid" id="listings-grid">
+            <!-- Listings will be dynamically loaded here -->
+        </div>
+        <div class="no-listings" id="no-listings" style="display: none;">
+            <i class="fas fa-store-slash"></i>
+            <h4>No listings found</h4>
+            <p>Try adjusting your filters or be the first to create a listing!</p>
+        </div>
+    </div>
+</div>
+
+<!-- Create Listing Modal -->
+<div class="modal" id="create-listing-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> Create New Listing</h3>
+            <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="create-listing-form">
+                <div class="form-group">
+                    <label>Select Item to Sell</label>
+                    <select id="item-select" required>
+                        <option value="">Choose an item...</option>
+                        <!-- Options will be populated from user inventory -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Price (Gold)</label>
+                    <input type="number" id="listing-price" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Listing Duration</label>
+                    <select id="listing-duration" required>
+                        <option value="86400">24 Hours</option>
+                        <option value="172800">48 Hours</option>
+                        <option value="259200">72 Hours</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn">Cancel</button>
+                    <button type="submit" class="create-btn">Create Listing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+    <script type="module" src="frontend.js"></script>
+</body>
+</html>

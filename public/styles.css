@@ -458,6 +458,140 @@ h1, h2, h3, h4, h5, h6,
     font-size: 1.1rem;
 }
 
+/* ========== ENHANCED STATS DISPLAY ========== */
+.stat-upgrade-item {
+    position: relative;
+}
+
+.stat-bar-container {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 3px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.stat-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+
+.stat-bar-base {
+    background: linear-gradient(90deg, #00ff88, #00ffff);
+}
+
+.stat-bar-bonus {
+    background: linear-gradient(90deg, #a29bfe, #6c5ce7);
+}
+
+.stat-bar-negative {
+    background: linear-gradient(90deg, #ff6b6b, #ee5a24);
+}
+
+.stat-values {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #88ffff;
+    margin-top: 4px;
+}
+
+.base-value {
+    color: #00ffff;
+}
+
+.bonus-value {
+    color: #a29bfe;
+}
+
+.negative-value {
+    color: #ff6b6b;
+}
+
+/* ========== ENHANCED UPGRADE BUTTONS ========== */
+.upgrade-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 255, 0.1));
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    color: #00ffff;
+    min-width: 100px;
+    justify-content: center;
+}
+
+.upgrade-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 255, 0.2));
+    border-color: #00ffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
+}
+
+.upgrade-btn:disabled {
+    background: rgba(102, 102, 102, 0.2);
+    border-color: rgba(102, 102, 102, 0.3);
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.upgrade-cost {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.upgrade-btn i {
+    font-size: 0.9rem;
+}
+
+/* Stat-specific button colors */
+.upgrade-btn.power {
+    background: linear-gradient(135deg, rgba(255, 65, 108, 0.1), rgba(255, 107, 107, 0.1));
+    border-color: rgba(255, 107, 107, 0.3);
+    color: #ff6b6b;
+}
+
+.upgrade-btn.speed {
+    background: linear-gradient(135deg, rgba(255, 195, 0, 0.1), rgba(254, 202, 87, 0.1));
+    border-color: rgba(254, 202, 87, 0.3);
+    color: #feca57;
+}
+
+.upgrade-btn.dexterity {
+    background: linear-gradient(135deg, rgba(0, 245, 160, 0.1), rgba(0, 255, 136, 0.1));
+    border-color: rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+}
+
+.upgrade-btn.structure {
+    background: linear-gradient(135deg, rgba(0, 178, 255, 0.1), rgba(72, 219, 251, 0.1));
+    border-color: rgba(72, 219, 251, 0.3);
+    color: #48dbfb;
+}
+
+.upgrade-btn.handling {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.1), rgba(162, 155, 254, 0.1));
+    border-color: rgba(162, 155, 254, 0.3);
+    color: #a29bfe;
+}
+
+.upgrade-btn.luck {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(0, 255, 136, 0.1));
+    border-color: rgba(0, 255, 136, 0.3);
+    color: #22c55e;
+}
+
 /* ========== QUICK STATS - CONSISTENT STYLING ========== */
 .quick-stats {
     display: flex;
@@ -1067,6 +1201,28 @@ h1, h2, h3, h4, h5, h6,
     box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
 }
 
+/* ========== GARAGE HEADER LAYOUT ========== */
+.garage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+}
+
+.garage-header .header-content {
+    flex: 1;
+}
+
+.garage-header .car-display-section {
+    width: 300px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.garage-header .car-card {
+    margin: 0;
+}
+
 /* ========== GARAGE SPECIFIC STYLES ========== */
 .garage-content {
     display: grid;
@@ -1074,6 +1230,7 @@ h1, h2, h3, h4, h5, h6,
     gap: 2rem;
     align-items: start;
 }
+
 
 .car-display-section {
     display: flex;
