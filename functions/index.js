@@ -1,19 +1,46 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+admin.initializeApp();
 
-const {onRequest} = require("firebase-functions/v2/https");
-const logger = require("firebase-functions/logger");
-
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
-
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// Clean up expired challenges every 5 minutes
+exports.cleanupExpiredChallenges = functions.pubsub
+  .schedule('every 5 minutes')
+  .onRun(async (context) => {
+    const now = admin.firestore.Timestamp.now();
+    const db = admin.firestore();
+    
+    try {
+      console.log('🔄 Running challenge cleanup...');
+      
+      // Find expired pending challenges
+      const challengesRef = db.collection('challenges');
+      const expiredQuery = challengesRef
+        .where('status', '==', 'pending')
+        .where('expiresAt', '<=', now);
+      
+      const snapshot = await expiredQuery.get();
+      
+      let cleanupCount = 0;
+      const batch = db.batch();
+      
+      snapshot.forEach(doc => {
+        batch.update(doc.ref, {
+          status: 'expired',
+          expiredAt: now
+        });
+        cleanupCount++;
+      });
+      
+      if (cleanupCount > 0) {
+        await batch.commit();
+        console.log(`✅ Cleaned up ${cleanupCount} expired challenges`);
+      } else {
+        console.log('✅ No expired challenges found');
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error in challenge cleanup:', error);
+      return null;
+    }
+  });

@@ -714,22 +714,6 @@ function loadNavbar() {
                     <a href="rankings.html" class="nav-link" id="nav-rankings"><i class="fas fa-trophy"></i> Rankings</a>
                     <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions</a>
                 </div>
-                
-                <!-- Simple user section that matches your existing code -->
-                <div class="nav-user" id="nav-user" style="display: none;">
-                    <div class="user-info">
-                        <span class="user-name">Welcome, Racer!</span>
-                    </div>
-                    <button class="logout-btn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                </div>
-                
-                <div class="nav-guest" id="nav-guest">
-                    <a href="login.html" class="login-btn">
-                        <i class="fas fa-sign-in-alt"></i> Login
-                    </a>
-                </div>
             </div>
         </nav>
     `;
@@ -3001,8 +2985,6 @@ function calculateBetAmount(playerGold, playerLevel, levelDiff) {
 
 // Accept a challenge
 window.acceptChallenge = async function(challengeId) {
-
-     // REST CHECK - Add this line to the very top
     if (window.restSystem?.isResting) {
         alert('Cannot accept challenges while resting!');
         return false;
@@ -3026,12 +3008,6 @@ window.acceptChallenge = async function(challengeId) {
             return;
         }
 
-        // Check if challenge expired
-        if (new Date() > challenge.expiresAt.toDate()) {
-            alert('This challenge has expired!');
-            return;
-        }
-
         // Check condition for both players
         const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
         const targetDoc = await getDoc(doc(db, "users", user.uid));
@@ -3039,29 +3015,13 @@ window.acceptChallenge = async function(challengeId) {
         const challengerData = challengerDoc.data();
         const targetData = targetDoc.data();
 
-        if (challengerData.condition < challenge.conditionCost) {
-            alert('Challenger does not have enough condition!');
+        if (challengerData.condition < challenge.conditionCost || targetData.condition < challenge.conditionCost) {
+            alert('One of the players does not have enough condition!');
             return;
         }
 
-        if (targetData.condition < challenge.conditionCost) {
-            alert('You do not have enough condition!');
-            return;
-        }
-
-        // Check if players have enough gold for the bet
-        if (challengerData.gold < challenge.betAmount) {
-            alert('Challenger does not have enough gold for the bet!');
-            return;
-        }
-
-        if (targetData.gold < challenge.betAmount) {
-            alert('You do not have enough gold for the bet!');
-            return;
-        }
-
-        if (confirm(`Accept race challenge from ${challenge.challengerName}?\n\n- Bet: ${challenge.betAmount} gold\n- Level difference: ${challenge.levelDifference}`)) {
-            // Start the race
+        if (confirm(`Accept race challenge from ${challenge.challengerName}?`)) {
+            // FIXED: Only update allowed fields
             await updateDoc(doc(db, "challenges", challengeId), {
                 status: 'accepted',
                 acceptedAt: serverTimestamp()
@@ -3075,120 +3035,140 @@ window.acceptChallenge = async function(challengeId) {
     }
 };
 
-// Simulate PVP race with enhanced rewards
+// FIXED: Simulate PVP race with proper permissions
 async function startPVPRace(challengeId, challenge) {
-      if (window.restSystem?.isResting) {
+    if (window.restSystem?.isResting) {
         alert('Cannot race while resting!');
         return false;
     }
-    const user = auth.currentUser;
     
+    const user = auth.currentUser;
+    if (!user) {
+        console.error('❌ No user in startPVPRace');
+        return;
+    }
+
     try {
-        // Get both players' data
-        const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
-        const targetDoc = await getDoc(doc(db, "users", challenge.targetId));
-        
-        const challengerData = challengerDoc.data();
-        const targetData = targetDoc.data();
+        console.log('🏁 Starting PvP race for challenge:', challengeId);
+        console.log('👤 Current user:', user.uid);
 
-        // Calculate race results based on stats, equipment, and level difference
-        const challengerTime = calculateRaceTime(challengerData, challenge.track, challenge.levelDifference);
-        const targetTime = calculateRaceTime(targetData, challenge.track, -challenge.levelDifference); // Negative for target
+        // Get current user's data
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+            console.error('❌ Current user data not found');
+            return;
+        }
+        const userData = userDoc.data();
 
-        const winnerId = challengerTime < targetTime ? challenge.challengerId : challenge.targetId;
-        const loserId = challengerTime < targetTime ? challenge.targetId : challenge.challengerId;
-        const winnerName = challengerTime < targetTime ? challenge.challengerName : challenge.targetName;
-        const loserName = challengerTime < targetTime ? challenge.targetName : challenge.challengerName;
-        const isDraw = Math.abs(challengerTime - targetTime) < 2; // Within 2 seconds is a draw
+        // Get opponent's data (just for race calculation, not for updating)
+        const opponentId = user.uid === challenge.challengerId ? challenge.targetId : challenge.challengerId;
+        const opponentDoc = await getDoc(doc(db, "users", opponentId));
+        const opponentData = opponentDoc.exists() ? opponentDoc.data() : {};
 
-        // Calculate rewards based on level difference
+        console.log('📊 User condition:', userData.condition);
+        console.log('📊 Opponent condition:', opponentData.condition || 100);
+
+        // Calculate race results
+        const userTime = calculateRaceTime(userData, challenge.track, 
+            user.uid === challenge.challengerId ? challenge.levelDifference : -challenge.levelDifference);
+        const opponentTime = calculateRaceTime(opponentData, challenge.track, 
+            user.uid === challenge.challengerId ? -challenge.levelDifference : challenge.levelDifference);
+
+        const winnerId = userTime < opponentTime ? user.uid : opponentId;
+        const isDraw = Math.abs(userTime - opponentTime) < 2;
+
+        console.log('⏱️ Race times - User:', userTime, 'Opponent:', opponentTime);
+        console.log('🏆 Winner:', winnerId, 'Draw:', isDraw);
+
+        // Calculate rewards
         const rewards = calculatePVPRewards(
             challenge.betAmount, 
             challenge.levelDifference, 
-            winnerId === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel,
-            loserId === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel
+            user.uid === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel,
+            opponentId === challenge.challengerId ? challenge.challengerLevel : challenge.targetLevel
         );
 
-        // Update challenge with results
-        await updateDoc(doc(db, "challenges", challengeId), {
+        console.log('💰 Rewards calculated:', rewards);
+
+        // STEP 1: Update the challenge status
+        console.log('🔄 Step 1: Updating challenge status...');
+        
+        const updateData = {
             status: 'completed',
             completedAt: serverTimestamp(),
-            challengerTime: challengerTime,
-            targetTime: targetTime,
-            winnerId: isDraw ? null : winnerId,
-            winnerName: isDraw ? null : winnerName,
-            loserId: isDraw ? null : loserId,
+            challengerTime: user.uid === challenge.challengerId ? userTime : opponentTime,
+            targetTime: user.uid === challenge.targetId ? userTime : opponentTime,
             isDraw: isDraw,
-            betAmount: challenge.betAmount,
             goldTransfer: isDraw ? 0 : rewards.goldTransfer,
             xpReward: rewards.xpReward,
             fameTransfer: isDraw ? 0 : rewards.fameTransfer
-        });
+        };
 
-        // Process rewards and penalties
-        if (isDraw) {
-            // Draw - no gold/fame transfer, both get XP
-            await updateDoc(doc(db, "users", challenge.challengerId), {
-                condition: challengerData.condition - challenge.conditionCost,
-                gold: challengerData.gold, // No change
-                fame: challengerData.fame  // No change
-            });
-
-            await updateDoc(doc(db, "users", challenge.targetId), {
-                condition: targetData.condition - challenge.conditionCost,
-                gold: targetData.gold, // No change
-                fame: targetData.fame  // No change
-            });
-
-            // Both get XP
-            await addXP(challenge.challengerId, rewards.xpReward);
-            await addXP(challenge.targetId, rewards.xpReward);
-
-        } else {
-            // Winner takes gold and fame from loser
-            await updateDoc(doc(db, "users", winnerId), {
-                condition: winnerId === challenge.challengerId ? 
-                    challengerData.condition - challenge.conditionCost : 
-                    targetData.condition - challenge.conditionCost,
-                gold: winnerId === challenge.challengerId ? 
-                    challengerData.gold + rewards.goldTransfer : 
-                    targetData.gold + rewards.goldTransfer,
-                fame: winnerId === challenge.challengerId ? 
-                    challengerData.fame + rewards.fameTransfer : 
-                    targetData.fame + rewards.fameTransfer
-            });
-
-            await updateDoc(doc(db, "users", loserId), {
-                condition: loserId === challenge.challengerId ? 
-                    challengerData.condition - challenge.conditionCost : 
-                    targetData.condition - challenge.conditionCost,
-                gold: loserId === challenge.challengerId ? 
-                    challengerData.gold - challenge.betAmount : 
-                    targetData.gold - challenge.betAmount,
-                fame: loserId === challenge.challengerId ? 
-                    Math.max(0, challengerData.fame - rewards.fameTransfer) : 
-                    Math.max(0, targetData.fame - rewards.fameTransfer)
-            });
-
-            // Winner gets XP, loser gets reduced XP
-            await addXP(winnerId, rewards.xpReward);
-            await addXP(loserId, Math.floor(rewards.xpReward * 0.3)); // Loser gets 30% XP
+        // Only add winner/loser fields if not a draw
+        if (!isDraw) {
+            updateData.winnerId = winnerId;
+            updateData.winnerName = winnerId === challenge.challengerId ? challenge.challengerName : challenge.targetName;
+            updateData.loserId = winnerId === challenge.challengerId ? challenge.targetId : challenge.challengerId;
         }
+
+        console.log('📝 Challenge update data:', updateData);
+        
+        await updateDoc(doc(db, "challenges", challengeId), updateData);
+        console.log('✅ Challenge updated successfully!');
+
+        // STEP 2: Update CURRENT USER stats only
+        console.log('🔄 Step 2: Updating current user stats...');
+
+        if (isDraw) {
+            // Draw - lose condition and get XP
+            await updateDoc(doc(db, "users", user.uid), {
+                condition: userData.condition - challenge.conditionCost
+            });
+            await addXP(user.uid, rewards.xpReward);
+            console.log('🤝 Draw: User lost condition and gained XP');
+        } else {
+            if (user.uid === winnerId) {
+                // User is winner - gain gold and fame
+                await updateDoc(doc(db, "users", user.uid), {
+                    condition: userData.condition - challenge.conditionCost,
+                    gold: userData.gold + rewards.goldTransfer,
+                    fame: (userData.fame || 0) + rewards.fameTransfer
+                });
+                await addXP(user.uid, rewards.xpReward);
+                console.log('🏆 User won: Gained gold, fame, and XP');
+            } else {
+                // User is loser - lose gold
+                await updateDoc(doc(db, "users", user.uid), {
+                    condition: userData.condition - challenge.conditionCost,
+                    gold: Math.max(0, userData.gold - challenge.betAmount),
+                    fame: Math.max(0, (userData.fame || 0) - rewards.fameTransfer)
+                });
+                await addXP(user.uid, Math.floor(rewards.xpReward * 0.3));
+                console.log('😞 User lost: Lost gold and gained reduced XP');
+            }
+        }
+
+        console.log('✅ User stats updated successfully!');
 
         // Show race results
-        showRaceResults(challenge, challengerTime, targetTime, winnerName, loserName, isDraw, rewards);
+        const winnerName = winnerId === challenge.challengerId ? challenge.challengerName : challenge.targetName;
+        const loserName = winnerId === challenge.challengerId ? challenge.targetName : challenge.challengerName;
+        
+        showRaceResults(challenge, userTime, opponentTime, winnerName, loserName, isDraw, rewards);
 
         // Refresh player data
-        if (user.uid === challenge.challengerId || user.uid === challenge.targetId) {
-            await loadPlayerData(user.uid);
-        }
+        await loadPlayerData(user.uid);
+
+        console.log('🎉 PvP race completed successfully!');
 
     } catch (error) {
-        console.error('Error in PVP race:', error);
+        console.error('❌ Error in PVP race:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
         alert('Error processing race: ' + error.message);
     }
 }
-
 // Calculate race time with level difference consideration
 function calculateRaceTime(playerData, track, levelDifference) {
     const stats = playerData.stats || {};
@@ -3318,6 +3298,11 @@ function getRandomTrack() {
 
 // Accept a challenge
 window.acceptChallenge = async function(challengeId) {
+    if (window.restSystem?.isResting) {
+        alert('Cannot accept challenges while resting!');
+        return false;
+    }
+
     const user = auth.currentUser;
     if (!user) return;
 
@@ -3349,7 +3334,7 @@ window.acceptChallenge = async function(challengeId) {
         }
 
         if (confirm(`Accept race challenge from ${challenge.challengerName}?`)) {
-            // Start the race
+            // FIXED: Only update allowed fields
             await updateDoc(doc(db, "challenges", challengeId), {
                 status: 'accepted',
                 acceptedAt: serverTimestamp()
@@ -3528,11 +3513,22 @@ async function loadPVPChallenges() {
 // Remove the problematic cleanupExpiredChallenges function and replace with:
 async function markChallengeAsExpired(challengeId) {
     try {
-        await updateDoc(doc(db, "challenges", challengeId), {
-            status: 'expired',
-            expiredAt: serverTimestamp()
-        });
-        console.log(`Marked challenge ${challengeId} as expired`);
+        const challengeRef = doc(db, "challenges", challengeId);
+        const challengeSnap = await getDoc(challengeRef);
+        
+        if (challengeSnap.exists()) {
+            const challenge = challengeSnap.data();
+            const user = auth.currentUser;
+            
+            // Only allow if user is involved in this challenge (SAFE)
+            if (user && (challenge.challengerId === user.uid || challenge.targetId === user.uid)) {
+                await updateDoc(challengeRef, {
+                    status: 'expired',
+                    expiredAt: serverTimestamp()
+                });
+                console.log(`Marked challenge ${challengeId} as expired`);
+            }
+        }
     } catch (error) {
         console.error('Error marking challenge as expired:', error);
     }
@@ -3840,44 +3836,84 @@ class PlayerListings {
             sort: 'newest',
             search: ''
         };
-        this.init();
+        
+        // Only initialize if we're on the marketplace page
+        if (this.isOnMarketplacePage()) {
+            this.init();
+        }
+    }
+
+    isOnMarketplacePage() {
+        return window.location.pathname.includes('marketplace.html') || 
+               document.getElementById('listings-grid') !== null;
     }
 
     init() {
-        this.setupEventListeners();
-        this.loadListings();
+        if (!this.isOnMarketplacePage()) return;
+        
+        try {
+            this.setupEventListeners();
+            this.loadListings();
+        } catch (error) {
+            console.log('PlayerListings not initialized (not on marketplace page)');
+        }
     }
 
     setupEventListeners() {
-        // Search and filter
-        document.getElementById('listing-search').addEventListener('input', (e) => {
-            this.filters.search = e.target.value;
-            this.filterListings();
-        });
+        // Safely get elements with null checks
+        const searchInput = document.getElementById('listing-search');
+        const categoryFilter = document.getElementById('category-filter');
+        const sortFilter = document.getElementById('sort-filter');
+        const createBtn = document.getElementById('create-listing-btn');
+        const createForm = document.getElementById('create-listing-form');
 
-        document.getElementById('category-filter').addEventListener('change', (e) => {
-            this.filters.category = e.target.value;
-            this.filterListings();
-        });
+        // Search and filter with null checks
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                this.filterListings();
+            });
+        }
 
-        document.getElementById('sort-filter').addEventListener('change', (e) => {
-            this.filters.sort = e.target.value;
-            this.sortListings();
-        });
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', (e) => {
+                this.filters.category = e.target.value;
+                this.filterListings();
+            });
+        }
 
-        // Create listing
-        document.getElementById('create-listing-btn').addEventListener('click', () => {
-            this.showCreateListingModal();
-        });
+        if (sortFilter) {
+            sortFilter.addEventListener('change', (e) => {
+                this.filters.sort = e.target.value;
+                this.sortListings();
+            });
+        }
 
-        document.getElementById('create-listing-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.createListing();
-        });
+        // Create listing with null checks
+        if (createBtn) {
+            createBtn.addEventListener('click', () => {
+                this.showCreateListingModal();
+            });
+        }
+
+        if (createForm) {
+            createForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.createListing();
+            });
+        }
     }
 
     async loadListings() {
+        // Only load if we're on the marketplace page
+        if (!this.isOnMarketplacePage()) return;
+
         try {
+            const grid = document.getElementById('listings-grid');
+            if (grid) {
+                grid.innerHTML = '<div class="loading">Loading listings...</div>';
+            }
+
             // Load active listings from Firebase
             const listingsRef = collection(db, 'marketplace/playerListings');
             const q = query(listingsRef, where('status', '==', 'active'));
@@ -3894,6 +3930,10 @@ class PlayerListings {
             this.renderListings();
         } catch (error) {
             console.error('Error loading listings:', error);
+            const grid = document.getElementById('listings-grid');
+            if (grid) {
+                grid.innerHTML = '<div class="error">Error loading listings</div>';
+            }
         }
     }
 
@@ -3902,15 +3942,18 @@ class PlayerListings {
         const noListings = document.getElementById('no-listings');
         const count = document.getElementById('listings-count');
 
+        // Safe element checks
+        if (!grid) return;
+
         if (this.listings.length === 0) {
             grid.innerHTML = '';
-            noListings.style.display = 'block';
-            count.textContent = '0';
+            if (noListings) noListings.style.display = 'block';
+            if (count) count.textContent = '0';
             return;
         }
 
-        noListings.style.display = 'none';
-        count.textContent = this.listings.length.toString();
+        if (noListings) noListings.style.display = 'none';
+        if (count) count.textContent = this.listings.length.toString();
 
         grid.innerHTML = this.listings.map(listing => `
             <div class="listing-item" data-listing-id="${listing.id}">
@@ -3995,11 +4038,16 @@ class PlayerListings {
 
     async showCreateListingModal() {
         await this.populateItemSelect();
-        document.getElementById('create-listing-modal').style.display = 'block';
+        const modal = document.getElementById('create-listing-modal');
+        if (modal) {
+            modal.style.display = 'block';
+        }
     }
 
     async populateItemSelect() {
         const select = document.getElementById('item-select');
+        if (!select) return;
+        
         // This would load from user's inventory
         // For now, placeholder
         select.innerHTML = `
@@ -4011,15 +4059,24 @@ class PlayerListings {
 
     async createListing() {
         const form = document.getElementById('create-listing-form');
+        if (!form) return;
+        
         const formData = new FormData(form);
         
+        // Safe reference to currentUser
+        const user = auth.currentUser;
+        if (!user) {
+            alert('Please log in to create listings.');
+            return;
+        }
+        
         const listingData = {
-            sellerId: currentUser.uid,
-            sellerName: currentUser.displayName,
-            itemType: document.getElementById('item-select').selectedOptions[0].dataset.type,
+            sellerId: user.uid,
+            sellerName: user.displayName || user.email.split('@')[0],
+            itemType: document.getElementById('item-select')?.selectedOptions[0]?.dataset?.type || 'vehicle',
             itemId: formData.get('item'),
             itemData: this.getItemData(formData.get('item')),
-            price: parseInt(formData.get('price')),
+            price: parseInt(formData.get('price')) || 0,
             endTime: Date.now() + (parseInt(formData.get('duration')) * 1000),
             createdAt: Date.now(),
             status: 'active'
@@ -4032,6 +4089,7 @@ class PlayerListings {
             this.loadListings(); // Refresh listings
         } catch (error) {
             console.error('Error creating listing:', error);
+            alert('Error creating listing: ' + error.message);
         }
     }
 
@@ -4039,8 +4097,18 @@ class PlayerListings {
         const listing = this.listings.find(l => l.id === listingId);
         if (!listing) return;
 
-        // Check if user has enough gold
-        if (currentUser.gold < listing.price) {
+        // Safe reference to currentUser
+        const user = auth.currentUser;
+        if (!user) {
+            alert('Please log in to buy items.');
+            return;
+        }
+
+        // Check if user has enough gold (you'll need to load user data)
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        if (!userData || userData.gold < listing.price) {
             alert('Not enough gold!');
             return;
         }
@@ -4049,7 +4117,7 @@ class PlayerListings {
             // Update listing status
             await updateDoc(doc(db, 'marketplace/playerListings', listingId), {
                 status: 'sold',
-                soldTo: currentUser.uid,
+                soldTo: user.uid,
                 soldAt: Date.now()
             });
 
@@ -4061,6 +4129,7 @@ class PlayerListings {
             this.loadListings(); // Refresh
         } catch (error) {
             console.error('Error buying listing:', error);
+            alert('Error purchasing item: ' + error.message);
         }
     }
 
@@ -4076,7 +4145,12 @@ class PlayerListings {
     }
 
     canBuy(listing) {
-        return currentUser.level >= listing.itemData.minLevel;
+        const user = auth.currentUser;
+        if (!user) return false;
+        
+        // You'll need to load user level from Firestore
+        // For now, return true as placeholder
+        return true;
     }
 
     formatItemType(type) {
@@ -4109,17 +4183,120 @@ class PlayerListings {
     }
 
     closeModal() {
-        document.getElementById('create-listing-modal').style.display = 'none';
-        document.getElementById('create-listing-form').reset();
+        const modal = document.getElementById('create-listing-modal');
+        const form = document.getElementById('create-listing-form');
+        
+        if (modal) modal.style.display = 'none';
+        if (form) form.reset();
     }
 }
 
-// Initialize
+// Safe initialization - only on marketplace pages
 let playerListings;
 document.addEventListener('DOMContentLoaded', () => {
-    playerListings = new PlayerListings();
+    // Only create PlayerListings if we're on the marketplace page
+    if (window.location.pathname.includes('marketplace.html') || 
+        document.getElementById('listings-grid')) {
+        playerListings = new PlayerListings();
+    }
 });
 
+
+// ========== ULTRA-SAFE CLEANUP ==========
+async function safeUserChallengeCleanup() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        console.log("🔍 Checking user's sent challenges...");
+        
+        // ONLY clean challenges user sent (challengerId)
+        const userChallengesQuery = query(
+            collection(db, "challenges"),
+            where("challengerId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+        
+        const snapshot = await getDocs(userChallengesQuery);
+        const now = new Date();
+        let cleanedUp = 0;
+        
+        for (const doc of snapshot.docs) {
+            const challenge = doc.data();
+            const expiresAt = challenge.expiresAt?.toDate();
+            
+            // Check if challenge expired
+            if (expiresAt && expiresAt <= now) {
+                try {
+                    console.log(`🕒 Expiring challenge: ${doc.id}`);
+                    await updateDoc(doc.ref, {
+                        status: 'expired',
+                        expiredAt: serverTimestamp()
+                    });
+                    cleanedUp++;
+                } catch (updateError) {
+                    console.error(`❌ Failed to update challenge ${doc.id}:`, updateError);
+                }
+            }
+        }
+        
+        if (cleanedUp > 0) {
+            console.log(`✅ Cleaned up ${cleanedUp} expired challenges`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Safe cleanup error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        // Debug: Check what permissions we actually have
+        if (error.code === 'permission-denied') {
+            console.log('🔒 Permission denied - checking user challenges access...');
+        }
+    }
+}
+
+// Debug function to check challenge permissions
+// Debug function to check challenges data
+window.debugChallenges = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("No user logged in");
+        return;
+    }
+
+    console.log("=== DEBUG CHALLENGES ===");
+    console.log("User ID:", user.uid);
+
+    try {
+        // Check challenges where user is challenger
+        const challengerQuery = query(
+            collection(db, "challenges"),
+            where("challengerId", "==", user.uid)
+        );
+        const challengerSnap = await getDocs(challengerQuery);
+        
+        console.log("Challenges where user is challenger:");
+        challengerSnap.forEach(doc => {
+            console.log(`- ${doc.id}:`, doc.data());
+        });
+
+        // Check challenges where user is target
+        const targetQuery = query(
+            collection(db, "challenges"),
+            where("targetId", "==", user.uid)
+        );
+        const targetSnap = await getDocs(targetQuery);
+        
+        console.log("Challenges where user is target:");
+        targetSnap.forEach(doc => {
+            console.log(`- ${doc.id}:`, doc.data());
+        });
+
+    } catch (error) {
+        console.error("Error debugging challenges:", error);
+    }
+};
 // ========== ONBOARDING TUTORIAL SYSTEM ==========
 
 class OnboardingTutorial {
@@ -4436,12 +4613,12 @@ function initializePage() {
     setTimeout(() => {
         loadDailyChallenges().catch(console.error);
         loadPVPChallenges().catch(console.error);
-        cleanupExpiredChallenges().catch(console.error);
+        safeUserChallengeCleanup().catch(console.error); // Use safe version
     }, 1000);
     
     // Refresh challenges every 30 seconds
     setInterval(loadPVPChallenges, 30000);
-    setInterval(cleanupExpiredChallenges, 60000);
+     setInterval(safeUserChallengeCleanup, 60000); // Use safe version
 }
 
 document.addEventListener('DOMContentLoaded', function() {
