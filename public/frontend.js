@@ -1,4 +1,4 @@
-// frontend.js - COMPLETE VERSION WITH ALL EXISTING CODE + STAT BAR FIXES
+// frontend.js - COMPLETE VERSION WITH GARAGE DISPLAY FIXES
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
 import { 
     getAuth, 
@@ -292,7 +292,7 @@ setTimeout(() => {
     window.debugAuth();
 }, 1000);
 
-// Enhanced login function (YOUR ORIGINAL)
+// Enhanced login function
 async function login(email, password) {
     try {
         console.log("Attempting login for:", email);
@@ -352,7 +352,7 @@ async function loadPlayerData(userId) {
     }
 }
 
-// Player data functions (YOUR ORIGINAL)
+// Player data functions
 // ========== CREATE NEW PLAYER DATA ==========
 async function createNewPlayer(uid, email) {
     try {
@@ -712,7 +712,7 @@ function loadNavbar() {
                     <a href="teams.html" class="nav-link" id="nav-teams"><i class="fa-solid fa-people-group"></i> Teams</a>
                     <a href="marketplace.html" class="nav-link" id="nav-marketplace"><i class="fas fa-shop"></i> Marketplace</a>
                     <a href="rankings.html" class="nav-link" id="nav-rankings"><i class="fas fa-trophy"></i> Rankings</a>
-                    <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions</a>
+                    <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions <span id="challenge-indicator" class="nav-notification" style="display: none;"></span></a>
                 </div>
             </div>
         </nav>
@@ -1240,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
 });
 
-// ========== PLAYER DATA FUNCTIONS ==========
+// ========== PLAYER DATA FUNCTIONS - FIXED GARAGE DISPLAY ==========
 function updatePlayerUI(userData) {
     try {
         // Check if userData is valid
@@ -1418,7 +1418,7 @@ function updateEquipmentDisplay(userData) {
     
 }
 
-// FIXED: Display all equipped items in the right panel (KEEP THIS ONE - REMOVE THE DUPLICATE BELOW)
+// FIXED: Display all equipped items in the right panel
 function updateEquippedItemsDisplay(inventory) {
     const equippedContainer = document.getElementById('equipped-items');
     if (!equippedContainer) return;
@@ -1542,15 +1542,6 @@ function getEquippedCar(inventory) {
         name: "Rusty Rider",
         stats: { power: 1, speed: 1 }
     };
-}
-
-window.logout = function() {
-    signOut(auth).then(() => {
-        sessionStorage.removeItem("playerData");
-        window.location.href = 'index.html';
-    }).catch((error) => {
-        console.error("Logout error:", error);
-    });
 }
 
 // ========== ENHANCED SHOP SYSTEM ==========
@@ -1934,7 +1925,11 @@ function displayRankings(players, startRank) {
                 </td>
                 <td class="player-cell">
                     <div class="player-info">
-                        <span class="player-name">${player.username || 'Unknown Player'}</span>
+                        <span class="player-name clickable" 
+                              onclick="viewPlayerProfile('${player.id}', '${player.username || 'Unknown Player'}', ${player.level || 1})"
+                              title="View Profile">
+                            ${player.username || 'Unknown Player'}
+                        </span>
                         ${isCurrentUser ? '<span class="you-badge">YOU</span>' : ''}
                     </div>
                 </td>
@@ -1965,6 +1960,24 @@ function displayRankings(players, startRank) {
             </tr>
         `;
     }).join('');
+    
+    // Add clickable style
+    const style = document.createElement('style');
+    style.textContent = `
+        .player-name.clickable {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 0.2rem 0.5rem;
+            border-radius: 5px;
+        }
+        
+        .player-name.clickable:hover {
+            background: rgba(0, 255, 255, 0.1);
+            color: #00ffff;
+            transform: translateX(5px);
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 function getCurrentCarName(player) {
@@ -2666,6 +2679,7 @@ function generateImageFallbacks(itemId, itemType) {
     
     return fallbacks.filter((path, index, self) => self.indexOf(path) === index); // Remove duplicates
 }
+
 // FIXED: Enhanced inventory image path resolver
 function getInventoryImagePath(item) {
     if (!item) return 'images/cars/default_car.jpg';
@@ -2965,6 +2979,8 @@ window.challengePlayer = async function(playerId, playerName, playerLevel) {
             alert('Error sending challenge: ' + error.message);
         }
     }
+
+    console.log('🎯 Challenge sent - target will see notification');
 };
 
 // Calculate bet amount based on player gold and level difference
@@ -3033,7 +3049,63 @@ window.acceptChallenge = async function(challengeId) {
     } catch (error) {
         alert('Error accepting challenge: ' + error.message);
     }
+
+    await checkPendingChallenges();
 };
+
+// ========== PENDING CHALLENGES CHECK ==========
+async function checkPendingChallenges() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("No user logged in, skipping pending challenges check");
+        return;
+    }
+
+    try {
+        console.log("🔍 Checking for pending challenges...");
+        
+        // Check challenges where current user is the target and status is pending
+        const receivedChallengesQuery = query(
+            collection(db, "challenges"),
+            where("targetId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+        
+        const receivedSnapshot = await getDocs(receivedChallengesQuery);
+        let pendingCount = 0;
+        
+        receivedSnapshot.forEach(doc => {
+            const challenge = doc.data();
+            if (challenge.expiresAt) {
+                const expiresAt = challenge.expiresAt.toDate();
+                if (expiresAt > new Date()) {
+                    pendingCount++;
+                }
+            }
+        });
+        
+        console.log(`📬 Pending challenges: ${pendingCount}`);
+        
+        // Update the red dot indicator
+        updateChallengeIndicator(pendingCount);
+        
+    } catch (error) {
+        console.error('Error checking pending challenges:', error);
+    }
+}
+
+// Update the red dot indicator in navbar
+function updateChallengeIndicator(pendingCount) {
+    const challengeIndicator = document.getElementById('challenge-indicator');
+    if (challengeIndicator) {
+        if (pendingCount > 0) {
+            challengeIndicator.style.display = 'block';
+        } else {
+            challengeIndicator.style.display = 'none';
+        }
+    }
+}
+
 
 // FIXED: Simulate PVP race with proper permissions
 async function startPVPRace(challengeId, challenge) {
@@ -3169,6 +3241,7 @@ async function startPVPRace(challengeId, challenge) {
         alert('Error processing race: ' + error.message);
     }
 }
+
 // Calculate race time with level difference consideration
 function calculateRaceTime(playerData, track, levelDifference) {
     const stats = playerData.stats || {};
@@ -3296,58 +3369,6 @@ function getRandomTrack() {
     return tracks[Math.floor(Math.random() * tracks.length)];
 }
 
-// Accept a challenge
-window.acceptChallenge = async function(challengeId) {
-    if (window.restSystem?.isResting) {
-        alert('Cannot accept challenges while resting!');
-        return false;
-    }
-
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-        const challengeDoc = await getDoc(doc(db, "challenges", challengeId));
-        if (!challengeDoc.exists()) {
-            alert('Challenge not found!');
-            return;
-        }
-
-        const challenge = challengeDoc.data();
-        
-        // Check if challenge is for current user
-        if (challenge.targetId !== user.uid) {
-            alert('This challenge is not for you!');
-            return;
-        }
-
-        // Check condition for both players
-        const challengerDoc = await getDoc(doc(db, "users", challenge.challengerId));
-        const targetDoc = await getDoc(doc(db, "users", user.uid));
-        
-        const challengerData = challengerDoc.data();
-        const targetData = targetDoc.data();
-
-        if (challengerData.condition < challenge.conditionCost || targetData.condition < challenge.conditionCost) {
-            alert('One of the players does not have enough condition!');
-            return;
-        }
-
-        if (confirm(`Accept race challenge from ${challenge.challengerName}?`)) {
-            // FIXED: Only update allowed fields
-            await updateDoc(doc(db, "challenges", challengeId), {
-                status: 'accepted',
-                acceptedAt: serverTimestamp()
-            });
-
-            // Start the race simulation
-            startPVPRace(challengeId, challenge);
-        }
-    } catch (error) {
-        alert('Error accepting challenge: ' + error.message);
-    }
-};
-
 // ========== DAILY CHALLENGES SYSTEM ==========
 let dailyChallenges = [];
 
@@ -3463,7 +3484,6 @@ window.claimChallengeReward = async function(challengeId) {
     }
 };
 
-// ========== PVP CHALLENGES DISPLAY ==========
 // ========== PVP CHALLENGES DISPLAY ==========
 async function loadPVPChallenges() {
     const user = auth.currentUser;
@@ -3653,6 +3673,8 @@ window.declineChallenge = async function(challengeId) {
         console.error('Error declining challenge:', error);
         alert('Error declining challenge: ' + error.message);
     }
+
+    await checkPendingChallenges();
 };
 
 // Add function to clean up expired challenges
@@ -4297,54 +4319,459 @@ window.debugChallenges = async function() {
         console.error("Error debugging challenges:", error);
     }
 };
+
+// ========== PLAYER PROFILE SYSTEM ==========
+let currentViewedPlayer = null;
+
+// Create and show player profile
+window.viewPlayerProfile = async function(playerId, playerName, playerLevel) {
+    console.log('👤 Loading profile for:', playerName);
+    
+    try {
+        // Show loading modal immediately
+        showLoadingModal();
+        
+        // Load player data
+        const playerDoc = await getDoc(doc(db, "users", playerId));
+        
+        if (!playerDoc.exists()) {
+            throw new Error('Player data not found');
+        }
+
+        const playerData = playerDoc.data();
+        
+        // Calculate stats
+        const raceStats = await calculatePlayerRaceStats(playerId);
+        const equippedCar = getEquippedCar(playerData.inventory || []);
+        const equippedItems = (playerData.inventory || []).filter(item => item.equipped && item.type !== 'car');
+        const stats = playerData.stats || {};
+        const totalStats = calculateTotalStats(stats, playerData.inventory);
+        
+        // Create and show the compact profile modal
+        createCompactProfileModal(playerData, playerName, playerLevel, playerId, raceStats, equippedCar, equippedItems, totalStats);
+        
+    } catch (error) {
+        console.error('Error loading player profile:', error);
+        showErrorModal(error.message);
+    }
+};
+
+// Show loading state
+function showLoadingModal() {
+    const modalHTML = `
+        <div id="player-profile-modal" class="modal" style="display: block; z-index: 10000;">
+            <div class="modal-content" style="max-width: 400px;">
+                <div style="text-align: center; padding: 2rem; color: #88ffff;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 1rem;"></i>
+                    <div>Loading profile...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    closePlayerProfile();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// SINGLE PROFILE-ONLY image function
+function getProfileImagePath(item) {
+    if (!item) return 'images/cars/default_car.jpg';
+    
+    // For cars in profile - use direct path without container styling
+    if (item.type === 'car') {
+        const carId = item.id.toLowerCase().replace(/ /g, '_');
+        return `images/cars/${carId}.jpg`;
+    }
+    
+    // For other items in profile
+    if (item.type) {
+        const itemId = item.id.toLowerCase().replace(/ /g, '_');
+        const typeFolder = `${item.type}s`;
+        return `images/${typeFolder}/${itemId}.jpg`;
+    }
+    
+    return 'images/cars/default_car.jpg';
+}
+
+// Create compact profile modal - USING THE SINGLE PROFILE FUNCTION
+function createCompactProfileModal(playerData, playerName, playerLevel, playerId, raceStats, equippedCar, equippedItems, totalStats) {
+    // Calculate total bonuses from equipped items
+    const itemBonuses = calculateItemBonuses(equippedItems);
+    
+    const modalHTML = `
+        <div id="player-profile-modal" class="modal" style="display: block; z-index: 10000;">
+            <div class="modal-content" style="max-width: 400px;">
+                <span class="close-modal" onclick="closePlayerProfile()" style="float: right; font-size: 1.5rem; cursor: pointer; color: #ff6b6b;">&times;</span>
+                
+                <!-- Compact Header -->
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <h2 style="color: #00ffff; margin: 0 0 0.5rem 0; font-size: 1.3rem;">${escapeHtml(playerName)}</h2>
+                    <div style="background: linear-gradient(135deg, #00ff88, #00ffff); color: #1a1a2e; padding: 0.3rem 1rem; border-radius: 15px; font-weight: bold; display: inline-block;">
+                        Level ${playerLevel}
+                    </div>
+                </div>
+
+                <!-- Car & Stats Side by Side -->
+                <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1rem; margin-bottom: 1.5rem; align-items: start;">
+                    <!-- Car Image - USING THE SINGLE PROFILE FUNCTION -->
+                    <div style="text-align: center; padding: 0; margin: 0 0 0 15px;">
+                        <img src="${getProfileImagePath(equippedCar)}" alt="${equippedCar.name}" 
+                             style="width: 100px; height: 75px; object-fit: cover; border-radius: 8px; border: 2px solid #00ffff;"
+                             onerror="this.src='images/cars/default_car.jpg'">
+                        <div style="font-size: 0.8rem; color: #00ffff; margin-top: 0.5rem; font-weight: bold;">${equippedCar.name}</div>
+                    </div>
+                    
+                    <!-- Stats -->
+                    <div>
+                        <div style="font-size: 0.9rem; color: #00ffff; margin-bottom: 0.5rem; font-weight: bold; text-align: center;">STATS</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; font-size: 0.75rem;">
+                            <div style="color: #88ffff; text-align: center;">Power:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.power || 0}</div>
+                            <div style="color: #88ffff; text-align: center;">Speed:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.speed || 0}</div>
+                            <div style="color: #88ffff; text-align: center;">Dexterity:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.dexterity || 0}</div>
+                            <div style="color: #88ffff; text-align: center;">Structure:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.structure || 0}</div>
+                            <div style="color: #88ffff; text-align: center;">Handling:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.handling || 0}</div>
+                            <div style="color: #88ffff; text-align: center;">Luck:</div>
+                            <div style="color: #00ffff; text-align: center; font-weight: bold;">${totalStats.total.luck || 0}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Equipped Items - Compact - USING THE SINGLE PROFILE FUNCTION -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.9rem; color: #00ffff; margin-bottom: 0.5rem; font-weight: bold; text-align: center;">EQUIPPED ITEMS</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
+                        ${equippedItems.length > 0 ? 
+                            equippedItems.slice(0, 4).map(item => {
+                                const imagePath = getProfileImagePath(item);
+                                return `
+                                <div style="background: rgba(0, 255, 255, 0.1); border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 6px; padding: 0.5rem; text-align: center; min-width: 70px;">
+                                    <img src="${imagePath}" alt="${item.name}"
+                                         style="width: 40px; height: 40px; object-fit: contain; border-radius: 4px; margin-bottom: 0.3rem;"
+                                         onerror="this.src='images/items/default_item.jpg'">
+                                    <div style="font-size: 0.7rem; color: #ffffff; font-weight: bold; margin-bottom: 0.2rem;">${escapeHtml(item.name)}</div>
+                                    <div style="font-size: 0.6rem; color: #00ff88;">
+                                        ${item.stats ? Object.entries(item.stats)
+                                            .filter(([stat, value]) => value > 0)
+                                            .map(([stat, value]) => `+${value} ${stat.charAt(0).toUpperCase()}`)
+                                            .join(' ') : ''}
+                                    </div>
+                                </div>
+                            `}).join('') : 
+                            '<div style="text-align: center; color: #88ffff; font-size: 0.8rem; padding: 0.5rem;">No items equipped</div>'
+                        }
+                        ${equippedItems.length > 4 ? 
+                            `<div style="background: rgba(0, 255, 255, 0.1); border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 6px; padding: 0.5rem; text-align: center; min-width: 70px; display: flex; align-items: center; justify-content: center;">
+                                <div style="font-size: 0.7rem; color: #ffffff;">+${equippedItems.length - 4} more</div>
+                            </div>` : ''
+                        }
+                    </div>
+                </div>
+
+                <!-- Stats Grid - Moved to bottom -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.5rem;">
+                    <div style="text-align: center; background: rgba(0, 255, 255, 0.1); padding: 0.8rem; border-radius: 8px;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: #00ff88;">${raceStats.wins}</div>
+                        <div style="font-size: 0.7rem; color: #88ffff;">WINS</div>
+                    </div>
+                    <div style="text-align: center; background: rgba(0, 255, 255, 0.1); padding: 0.8rem; border-radius: 8px;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: #ff6b6b;">${raceStats.losses}</div>
+                        <div style="font-size: 0.7rem; color: #88ffff;">LOSSES</div>
+                    </div>
+                    <div style="text-align: center; background: rgba(0, 255, 255, 0.1); padding: 0.8rem; border-radius: 8px;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: #feca57;">${raceStats.draws || 0}</div>
+                        <div style="font-size: 0.7rem; color: #88ffff;">DRAWS</div>
+                    </div>
+                </div>
+
+                <!-- Challenge Button -->
+                <div style="text-align: center;">
+                    ${getChallengeButtonHTML(playerId, playerName, playerLevel)}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    closePlayerProfile();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Add this new function for profile image error handling
+window.handleProfileImageError = function(imgElement, itemId, itemType) {
+    console.log(`🖼️ Profile image failed: ${imgElement.src}`);
+    
+    // Use the same fallback logic as inventory
+    const fallbacks = generateImageFallbacks(itemId, itemType);
+    tryNextFallback(imgElement, fallbacks, 0);
+};
+
+// Calculate total bonuses from equipped items
+function calculateItemBonuses(equippedItems) {
+    const bonuses = {
+        power: 0,
+        speed: 0,
+        handling: 0,
+        luck: 0,
+        dexterity: 0,
+        structure: 0
+    };
+    
+    equippedItems.forEach(item => {
+        if (item.stats) {
+            Object.entries(item.stats).forEach(([stat, value]) => {
+                if (bonuses.hasOwnProperty(stat)) {
+                    bonuses[stat] += value;
+                }
+            });
+        }
+    });
+    
+    return bonuses;
+}
+
+// Show error modal
+function showErrorModal(message) {
+    const modalHTML = `
+        <div id="player-profile-modal" class="modal" style="display: block; z-index: 10000;">
+            <div class="modal-content" style="max-width: 350px;">
+                <span class="close-modal" onclick="closePlayerProfile()" style="float: right; font-size: 1.5rem; cursor: pointer; color: #ff6b6b;">&times;</span>
+                <div style="text-align: center; padding: 1.5rem; color: #ff6b6b;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; margin-bottom: 1rem;"></i>
+                    <div style="font-size: 0.9rem;">Error loading profile</div>
+                    <div style="font-size: 0.8rem; margin-top: 0.5rem; color: #88ffff;">${escapeHtml(message)}</div>
+                    <button onclick="closePlayerProfile()" 
+                            style="margin-top: 1rem; padding: 0.5rem 1rem; background: #ff6b6b; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.8rem;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    closePlayerProfile();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Close profile modal
+window.closePlayerProfile = function() {
+    const modal = document.getElementById('player-profile-modal');
+    if (modal) modal.remove();
+};
+
+// Calculate player race statistics
+async function calculatePlayerRaceStats(playerId) {
+    try {
+        const challengesQuery = query(
+            collection(db, "challenges"),
+            where("status", "==", "completed")
+        );
+        
+        const snapshot = await getDocs(challengesQuery);
+        let wins = 0, losses = 0, draws = 0;
+        
+        snapshot.forEach(doc => {
+            const challenge = doc.data();
+            
+            if (challenge.isDraw && 
+                (challenge.challengerId === playerId || challenge.targetId === playerId)) {
+                draws++;
+            } else if (challenge.winnerId === playerId) {
+                wins++;
+            } else if (challenge.loserId === playerId) {
+                losses++;
+            }
+        });
+        
+        return { wins, losses, draws };
+    } catch (error) {
+        console.error('Error calculating race stats:', error);
+        return { wins: 0, losses: 0, draws: 0 };
+    }
+}
+
+// Get challenge button HTML
+function getChallengeButtonHTML(playerId, playerName, playerLevel) {
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+        return '<button disabled style="background: #666; color: #ccc; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; font-size: 0.8rem; cursor: not-allowed;">Login to Challenge</button>';
+    }
+    
+    if (currentUser.uid === playerId) {
+        return '<button disabled style="background: #666; color: #ccc; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; font-size: 0.8rem; cursor: not-allowed;">❌ Cannot Challenge Yourself</button>';
+    }
+    
+    return `
+        <button onclick="challengePlayer('${playerId}', '${playerName}', ${playerLevel}); closePlayerProfile();"
+                style="background: linear-gradient(135deg, #00ff88, #00ffff); color: #1a1a2e; border: none; padding: 0.8rem 2rem; border-radius: 25px; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: all 0.3s ease;">
+            🏁 Challenge Player
+        </button>
+    `;
+}
+
+// Helper function to escape HTML
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Initialize in rankings page
+function initializePlayerProfilesSystem() {
+    console.log('✅ Player profile system ready');
+}
+
 // ========== ONBOARDING TUTORIAL SYSTEM ==========
 
 class OnboardingTutorial {
     constructor() {
         this.currentSlide = 1;
-        this.totalSlides = 8; // Updated to 8 slides
-        this.debugMode = true; // Set to false when done testing
+        this.totalSlides = 8;
+        this.debugMode = false;
+        this.initialized = false;
+        this.userChecked = false;
         this.init();
     }
 
     init() {
-        console.log('🚀 OnboardingTutorial initialized with', this.totalSlides, 'slides');
+        console.log('🚀 OnboardingTutorial initialized');
         this.setupEventListeners();
-        this.checkFirstTimeUser();
+        this.addTutorialButton();
+        
+        if (auth.currentUser) {
+            this.waitForUserData();
+        } else {
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+                if (user && !this.initialized) {
+                    this.initialized = true;
+                    this.waitForUserData();
+                    unsubscribe();
+                }
+            });
+        }
+    }
+
+    async waitForUserData() {
+        console.log('⏳ Waiting for user data to be ready...');
+        
+        setTimeout(async () => {
+            await this.checkFirstTimeUser();
+        }, 3000);
     }
 
     async checkFirstTimeUser() {
-        console.log('🔍 Checking if first time user...');
-        
-        // Debug mode - always show tutorial
-        if (this.debugMode) {
-            console.log('🐛 DEBUG MODE: Forcing tutorial to show');
-            setTimeout(() => {
-                this.showTutorial();
-            }, 1500);
+        const user = auth.currentUser;
+        if (!user) {
+            console.log('❌ No user for tutorial check');
             return;
         }
 
-        // Production mode - check if completed before
-        const userData = await this.getUserData();
+        console.log('🔍 Checking tutorial status for NEW user:', user.uid, user.email);
         
-        if (!userData || !userData.hasCompletedTutorial) {
-            console.log('👋 First time user - showing tutorial');
+        if (this.userChecked) {
+            console.log('✅ Already checked tutorial for this user');
+            return;
+        }
+
+        this.userChecked = true;
+
+        if (this.debugMode) {
+            console.log('🐛 DEBUG MODE: Tutorial would show now');
+            this.showTutorial();
+            return;
+        }
+
+        try {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            
+            if (!userDoc.exists()) {
+                console.log('👶 Brand new user - no Firestore data exists yet');
+                console.log('🎬 Showing tutorial for brand new user');
+                setTimeout(() => {
+                    this.showTutorial();
+                }, 1000);
+                return;
+            }
+
+            const userData = userDoc.data();
+            const firebaseCompleted = userData.hasCompletedTutorial === true;
+            const localStorageCompleted = localStorage.getItem('ignition_tutorial_completed') === 'true';
+
+            console.log('📋 User tutorial status:', {
+                firebase: firebaseCompleted,
+                localStorage: localStorageCompleted,
+                userExists: true
+            });
+
+            if (firebaseCompleted || localStorageCompleted) {
+                console.log('🎯 Returning user - tutorial already completed');
+                return;
+            }
+
+            console.log('👋 Existing user who needs tutorial');
             setTimeout(() => {
                 this.showTutorial();
             }, 1000);
-        } else {
-            console.log('🎯 Returning user - tutorial already completed');
+
+        } catch (error) {
+            console.error('❌ Error checking user data:', error);
+            console.log('🔄 Error checking user, showing tutorial to be safe');
+            setTimeout(() => {
+                this.showTutorial();
+            }, 1000);
         }
     }
 
-    async getUserData() {
-        // Check localStorage for tutorial completion
-        const tutorialCompleted = localStorage.getItem('ignition_tutorial_completed');
-        console.log('📋 Tutorial completion status:', tutorialCompleted);
-        return {
-            hasCompletedTutorial: tutorialCompleted === 'true'
+    addTutorialButton() {
+        if (document.getElementById('rewatch-tutorial-btn')) return;
+
+        const tutorialBtn = document.createElement('button');
+        tutorialBtn.id = 'rewatch-tutorial-btn';
+        tutorialBtn.innerHTML = '📚 Tutorial';
+        tutorialBtn.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 10px;
+            z-index: 10000;
+            background: linear-gradient(135deg, #00ff88, #00ffff);
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        `;
+        
+        tutorialBtn.onmouseenter = () => {
+            tutorialBtn.style.transform = 'scale(1.1)';
+            tutorialBtn.style.boxShadow = '0 6px 20px rgba(0, 255, 255, 0.5)';
         };
+        
+        tutorialBtn.onmouseleave = () => {
+            tutorialBtn.style.transform = 'scale(1)';
+            tutorialBtn.style.boxShadow = '0 4px 15px rgba(0, 255, 255, 0.3)';
+        };
+
+        tutorialBtn.onclick = () => {
+            console.log('🎬 User requested to re-watch tutorial');
+            this.showTutorial();
+        };
+
+        tutorialBtn.title = 'Re-watch Tutorial';
+        document.body.appendChild(tutorialBtn);
+        console.log('✅ Tutorial re-watch button added');
     }
 
     showTutorial() {
@@ -4355,10 +4782,14 @@ class OnboardingTutorial {
             return;
         }
         
-        // Reset to first slide
         this.currentSlide = 1;
         this.updateSlides();
         this.updateProgress();
+        
+        const dontShowAgain = document.getElementById('dont-show-again');
+        if (dontShowAgain) {
+            dontShowAgain.checked = false;
+        }
         
         modal.style.display = 'block';
         console.log('✅ Tutorial visible - Slide', this.currentSlide);
@@ -4368,14 +4799,18 @@ class OnboardingTutorial {
         const dontShowAgain = document.getElementById('dont-show-again');
         const shouldSavePreference = dontShowAgain && dontShowAgain.checked;
         
+        console.log('🚫 Hiding tutorial, save preference:', shouldSavePreference);
+        
         if (shouldSavePreference) {
-            console.log('💾 Saving tutorial preference: Do not show again');
             this.markTutorialCompleted();
         } else {
-            console.log('🚫 Tutorial closed but will show again next time');
+            console.log('💡 Tutorial closed - will show on manual request');
         }
         
-        document.getElementById('onboarding-modal').style.display = 'none';
+        const modal = document.getElementById('onboarding-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
     }
 
     nextSlide() {
@@ -4399,18 +4834,15 @@ class OnboardingTutorial {
     }
 
     updateSlides() {
-        // Hide all slides
         document.querySelectorAll('.tutorial-slide').forEach(slide => {
             slide.classList.remove('active');
         });
 
-        // Show current slide
         const currentSlide = document.querySelector(`[data-slide="${this.currentSlide}"]`);
         if (currentSlide) {
             currentSlide.classList.add('active');
         }
 
-        // Update button states
         this.updateButtonStates();
     }
 
@@ -4433,14 +4865,13 @@ class OnboardingTutorial {
         const prevBtn = document.getElementById('prev-slide');
         const nextBtn = document.getElementById('next-slide');
         const skipBtn = document.getElementById('skip-tutorial');
+        const startBtn = document.getElementById('start-racing-btn');
 
-        // Update prev button
         if (prevBtn) {
             prevBtn.disabled = this.currentSlide === 1;
             prevBtn.style.display = this.currentSlide === 1 ? 'none' : 'block';
         }
 
-        // Update next button - hide on last slide
         if (nextBtn) {
             if (this.currentSlide === this.totalSlides) {
                 nextBtn.style.display = 'none';
@@ -4449,16 +4880,18 @@ class OnboardingTutorial {
             }
         }
 
-        // Update skip button - hide on last slide
         if (skipBtn) {
             skipBtn.style.display = this.currentSlide === this.totalSlides ? 'none' : 'block';
+        }
+
+        if (startBtn) {
+            startBtn.style.display = this.currentSlide === this.totalSlides ? 'block' : 'none';
         }
     }
 
     setupEventListeners() {
         console.log('🔧 Setting up tutorial event listeners...');
         
-        // Navigation buttons
         const nextBtn = document.getElementById('next-slide');
         const prevBtn = document.getElementById('prev-slide');
         const skipBtn = document.getElementById('skip-tutorial');
@@ -4483,8 +4916,7 @@ class OnboardingTutorial {
         if (skipBtn) {
             skipBtn.addEventListener('click', () => {
                 console.log('⏭️ Tutorial skipped by user');
-                document.getElementById('onboarding-modal').style.display = 'none';
-                // Don't save preference when skipping
+                this.hideTutorial();
             });
         } else {
             console.error('❌ Skip button not found');
@@ -4499,7 +4931,6 @@ class OnboardingTutorial {
             console.error('❌ Start racing button not found');
         }
 
-        // Keyboard navigation
         document.addEventListener('keydown', (e) => {
             const modal = document.getElementById('onboarding-modal');
             if (modal && modal.style.display === 'block') {
@@ -4512,7 +4943,7 @@ class OnboardingTutorial {
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
                     console.log('ESC: Tutorial closed');
-                    document.getElementById('onboarding-modal').style.display = 'none';
+                    this.hideTutorial();
                 }
             }
         });
@@ -4521,38 +4952,46 @@ class OnboardingTutorial {
     }
 
     markTutorialCompleted() {
-        console.log('💾 Saving tutorial completion to localStorage');
-        localStorage.setItem('ignition_tutorial_completed', 'true');
+        const user = auth.currentUser;
+        console.log('💾 MARKING TUTORIAL AS COMPLETED for user:', user?.uid);
         
-        // Also save to Firebase user preferences if user is logged in
-        this.saveTutorialCompletion();
+        localStorage.setItem('ignition_tutorial_completed', 'true');
+        localStorage.setItem('ignition_tutorial_timestamp', Date.now().toString());
+        
+        console.log('✅ Saved to localStorage - tutorial will not show automatically');
+
+        this.saveTutorialToFirebase();
     }
 
-    async saveTutorialCompletion() {
-        if (typeof currentUser !== 'undefined' && currentUser) {
-            try {
-                console.log('🔥 Saving tutorial completion to Firebase');
-                await setDoc(doc(db, 'userPreferences', currentUser.uid), {
-                    hasCompletedTutorial: true,
-                    tutorialCompletedAt: new Date()
-                }, { merge: true });
-            } catch (error) {
-                console.error('❌ Error saving tutorial completion to Firebase:', error);
-            }
-        } else {
+    async saveTutorialToFirebase() {
+        const user = auth.currentUser;
+        if (!user) {
             console.log('👤 No user logged in, skipping Firebase save');
+            return;
+        }
+
+        try {
+            console.log('🔥 Saving tutorial completion to Firebase for user:', user.uid);
+            await setDoc(doc(db, "users", user.uid), {
+                hasCompletedTutorial: true,
+                tutorialCompletedAt: serverTimestamp(),
+                lastLogin: serverTimestamp()
+            }, { merge: true });
+            console.log('✅ Successfully saved to Firebase');
+        } catch (error) {
+            console.error('❌ Error saving tutorial to Firebase:', error);
         }
     }
 
     // Debug methods
     resetTutorial() {
         localStorage.removeItem('ignition_tutorial_completed');
-        console.log('🔄 Tutorial reset - will show on next page load');
+        localStorage.removeItem('ignition_tutorial_timestamp');
+        console.log('🔄 Tutorial reset - will show automatically on next page load');
     }
 
     showTutorialManually() {
         console.log('🐛 Manual tutorial trigger');
-        this.resetTutorial();
         this.showTutorial();
     }
 }
@@ -4565,6 +5004,53 @@ document.addEventListener('DOMContentLoaded', () => {
     // Expose to global for easy console access
     window.debugTutorial = onboardingTutorial;
     
+    // Add debug commands
+    window.tutorialDebug = {
+        checkStatus: function() {
+            console.log('=== TUTORIAL DEBUG ===');
+            const user = auth.currentUser;
+            console.log('User:', user?.uid, user?.email);
+            console.log('localStorage:', localStorage.getItem('ignition_tutorial_completed'));
+            console.log('timestamp:', localStorage.getItem('ignition_tutorial_timestamp'));
+            
+            if (user) {
+                getDoc(doc(db, "users", user.uid)).then(doc => {
+                    if (doc.exists()) {
+                        const data = doc.data();
+                        console.log('Firebase user exists:', true);
+                        console.log('Firebase hasCompletedTutorial:', data.hasCompletedTutorial);
+                        console.log('Firebase user created:', data.createdAt);
+                    } else {
+                        console.log('Firebase user exists: FALSE - Brand new user!');
+                    }
+                });
+            }
+        },
+        
+        resetForCurrentUser: function() {
+            const user = auth.currentUser;
+            if (!user) {
+                console.log('❌ No user logged in');
+                return;
+            }
+            
+            localStorage.removeItem('ignition_tutorial_completed');
+            localStorage.removeItem('ignition_tutorial_timestamp');
+            
+            setDoc(doc(db, "users", user.uid), {
+                hasCompletedTutorial: false,
+                tutorialCompletedAt: null
+            }, { merge: true }).then(() => {
+                console.log('🔄 Tutorial reset for current user:', user.uid);
+                console.log('🔁 Refresh the page to see tutorial');
+            });
+        },
+        
+        forceShow: function() {
+            window.onboardingTutorial.showTutorial();
+        }
+    };
+
     // Add debug button to page (remove in production)
     if (onboardingTutorial.debugMode) {
         const debugBtn = document.createElement('button');
@@ -4595,9 +5081,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // Console commands for testing:
 console.log(`
 🎮 Tutorial Debug Commands:
+• Click the "📚 Tutorial" button in top-right to re-watch tutorial
+• tutorialDebug.checkStatus() - Check current user's tutorial status
+• tutorialDebug.resetForCurrentUser() - Reset tutorial for current user
+• tutorialDebug.forceShow() - Force show tutorial
 • debugTutorial.showTutorialManually() - Show tutorial now
 • debugTutorial.resetTutorial() - Reset completion status
-• localStorage.removeItem('ignition_tutorial_completed') - Clear storage
 `);
 
 // ========== APPLICATION INITIALIZATION ==========
@@ -4605,7 +5094,10 @@ function initializePage() {
     const path = window.location.pathname;
     if (path.includes('garage.html')) initializeGarage();
     else if (path.includes('shop.html')) initializeShop();
-    else if (path.includes('rankings.html')) initializeRankings();
+    else if (path.includes('rankings.html')) {
+        initializeRankings();
+        initializePlayerProfilesSystem(); 
+    }
     else if (path.includes('training.html')) initializeTraining();
     else if (document.getElementById('inventory-grid')) initializeInventory();
 
@@ -4614,11 +5106,13 @@ function initializePage() {
         loadDailyChallenges().catch(console.error);
         loadPVPChallenges().catch(console.error);
         safeUserChallengeCleanup().catch(console.error); // Use safe version
+        checkPendingChallenges().catch(console.error);
     }, 1000);
     
     // Refresh challenges every 30 seconds
     setInterval(loadPVPChallenges, 30000);
      setInterval(safeUserChallengeCleanup, 60000); // Use safe version
+     setInterval(checkPendingChallenges, 10000); 
 }
 
 document.addEventListener('DOMContentLoaded', function() {

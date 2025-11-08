@@ -4519,3 +4519,35 @@ body.resting .challenge-actions .decline-btn {
     border-color: rgba(255, 107, 107, 0.3);
     color: #ff6b6b;
 }
+
+.nav-notification {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    background: #ff6b6b;
+    border-radius: 50%;
+    border: 2px solid #1a1a2e;
+    box-shadow: 0 0 10px #ff6b6b, 0 0 20px #ff6b6b;
+    animation: pulse-glow 2s infinite;
+}
+
+.nav-link {
+    position: relative;
+}
+
+@keyframes pulse-glow {
+    0% {
+        box-shadow: 0 0 5px #ff6b6b, 0 0 10px #ff6b6b;
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 15px #ff6b6b, 0 0 30px #ff6b6b;
+        transform: scale(1.1);
+    }
+    100% {
+        box-shadow: 0 0 5px #ff6b6b, 0 0 10px #ff6b6b;
+        transform: scale(1);
+    }
+}

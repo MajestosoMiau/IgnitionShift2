@@ -46,7 +46,7 @@
                     <label>Sort By:</label>
                     <select id="sort-by" class="sort-select">
                         <option value="fame">Fame Points</option>
-                        <option value="level">Player Level</option>
+                        <option value="level">Player Level</option>                        
                     </select>
                 </div>
                 <div class="pagination-controls">
@@ -114,6 +114,66 @@
             </div>
         </div>
     </div>
+
+
+    <!-- Player Profile Modal -->
+<div id="player-profile-modal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <span class="close-modal">&times;</span>
+        <div id="player-profile-content">
+            <div class="profile-header">
+                <h2 id="profile-player-name">Player Name</h2>
+                <div class="profile-level">Level <span id="profile-level">1</span></div>
+            </div>
+            
+            <div class="profile-stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="profile-wins">0</div>
+                    <div class="stat-label">Wins</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="profile-losses">0</div>
+                    <div class="stat-label">Losses</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="profile-draws">0</div>
+                    <div class="stat-label">Draws</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="profile-fame">0</div>
+                    <div class="stat-label">Fame</div>
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h3>🏎️ Current Car</h3>
+                <div id="profile-car-info" class="car-display">
+                    <!-- Car info will be loaded here -->
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h3>⚙️ Equipped Items</h3>
+                <div id="profile-equipped-items" class="equipped-items-grid">
+                    <!-- Equipped items will be loaded here -->
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h3>📊 Stats</h3>
+                <div id="profile-player-stats" class="stats-grid">
+                    <!-- Stats will be loaded here -->
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <button class="action-btn challenge-btn" id="profile-challenge-btn">
+                    🏁 Challenge Player
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
         <script type="module" src="frontend.js"></script>
 
 
