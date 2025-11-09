@@ -367,6 +367,9 @@ async function createNewPlayer(uid, email) {
             tokens: 0,
             fame: 0,
             condition: 100,
+            wins: 0,
+            losses: 0,
+            draws: 0,
             lastConditionUpdate: serverTimestamp(),
             stats: {
                 power: 5,
@@ -1627,10 +1630,14 @@ window.buyItem = async function(category, itemId, itemName, priceGold, priceToke
             await updateDoc(userRef, updateData);
             alert(`🎉 Successfully purchased and equipped ${itemName} for ${currencyMessage}!`);
             await loadPlayerData(user.uid);
+            // Add this after successful purchase
+window.trackItemPurchase();
         }
     } catch (error) {
         alert('Error making purchase: ' + error.message);
     }
+
+    
 }
 
 window.showCategory = async function(category, buttonElement) {
@@ -1658,19 +1665,53 @@ window.showCategory = async function(category, buttonElement) {
         }
 
         const itemsArray = [];
+        const seenItems = new Map(); // Use Map for better duplicate detection
+        
         querySnapshot.forEach((doc) => {
             const item = doc.data();
+            const documentId = doc.id;
+            
+            // Create a unique key for the item to detect duplicates
+            const itemKey = `${item.name}_${item.minimumRequiredLevel}_${item.price_gold}`;
+            
+            // Skip if we've already seen this exact item
+            if (seenItems.has(itemKey)) {
+                console.warn(`🚫 DUPLICATE ITEM SKIPPED: ${item.name} (ID: ${documentId})`);
+                console.log('   Existing item:', seenItems.get(itemKey));
+                console.log('   Duplicate item:', { id: documentId, ...item });
+                return;
+            }
+            
+            // Mark this item as seen
+            seenItems.set(itemKey, { id: documentId, ...item });
+            
             itemsArray.push({
-                id: doc.id,
+                id: documentId,
                 ...item,
-                minimumRequiredLevel: item.minimumRequiredLevel || 0,
+                minimumRequiredLevel: item.minimumRequiredLevel || 1,
                 price_gold: item.price_gold || 0,
                 price_tokens: item.price_tokens || 0
             });
         });
 
-        itemsArray.sort((a, b) => a.minimumRequiredLevel - b.minimumRequiredLevel);
+        console.log(`🛍️ Processed ${itemsArray.length} unique items in ${category}`);
+        
+        // Sort by minimumRequiredLevel (lowest to highest)
+        itemsArray.sort((a, b) => {
+            const levelA = a.minimumRequiredLevel || 1;
+            const levelB = b.minimumRequiredLevel || 1;
+            return levelA - levelB;
+        });
 
+        // Debug: Log the final sorted list
+        console.log(`📊 Final sorted ${category} list:`);
+        itemsArray.forEach((item, index) => {
+            console.log(`   ${index + 1}. ${item.name} - Level ${item.minimumRequiredLevel} - ${item.price_gold} gold`);
+        });
+
+        // Clear and display items
+        itemsList.innerHTML = '';
+        
         itemsArray.forEach((item) => {
             const documentId = item.id;
             const imagePath = getCorrectImagePath(documentId, category, item);
@@ -1725,29 +1766,94 @@ window.showCategory = async function(category, buttonElement) {
                     <img src="${imagePath}" alt="${item.name}" class="item-image" onerror="this.style.display='none'">
                 </div>
                 <div class="item-stats-section">
-                    ${item.minimumRequiredLevel ? 
+                    ${item.minimumRequiredLevel > 1 ? 
                         `<div class="requirements">📊 Level ${item.minimumRequiredLevel} Required</div>` : ''}
                     ${priceSectionHTML}
                     ${stats.length > 0 ? `<div class="stats-grid">${statsHTML}</div>` : ''}
                     <div class="item-actions-section">
                         <button class="action-btn buy-btn" 
-                                onclick="buyItem('${category}', '${documentId}', '${item.name}', ${item.price_gold || 0}, ${item.price_tokens || 0})">
-                            BUY
+                                onclick="buyItem('${category}', '${documentId}', '${item.name}', ${item.price_gold || 0}, ${item.price_tokens || 0})"
+                                ${playerOwnsItem ? 'disabled' : ''}>
+                            ${playerOwnsItem ? 'OWNED' : 'BUY'}
                         </button>
                         <button class="action-btn sell-btn" 
                                 onclick="sellItem('${category}', '${documentId}', '${item.name}', ${item.sellValue || Math.floor(item.price_gold * 0.7)})"
                                 ${!playerOwnsItem ? 'disabled' : ''}>
-                            ${playerOwnsItem ? 'SELL' : 'OWNED'}
+                            ${playerOwnsItem ? 'SELL' : 'LOCKED'}
                         </button>
                     </div>
                 </div>
             `;
             itemsList.appendChild(itemContainer);
         });
+
     } catch (error) {
         itemsList.innerHTML = `<div class="error">Error loading ${category}: ${error.message}</div>`;
     }
 }
+
+window.debugShopSorting = async function(category) {
+    const querySnapshot = await getDocs(collection(db, category));
+    const itemsArray = [];
+    
+    querySnapshot.forEach((doc) => {
+        const item = doc.data();
+        itemsArray.push({
+            id: doc.id,
+            name: item.name,
+            level: item.minimumRequiredLevel || 1
+        });
+    });
+
+    console.log('BEFORE SORTING:', itemsArray);
+    
+    itemsArray.sort((a, b) => (a.level || 1) - (b.level || 1));
+    
+    console.log('AFTER SORTING:', itemsArray);
+};
+
+window.debugShopDuplicates = async function(category) {
+    console.log(`🔍 DEBUGGING DUPLICATES IN ${category.toUpperCase()}`);
+    
+    const querySnapshot = await getDocs(collection(db, category));
+    const allItems = [];
+    const duplicateItems = new Map();
+    
+    querySnapshot.forEach((doc) => {
+        const item = doc.data();
+        const itemKey = `${item.name}_${item.minimumRequiredLevel}_${item.price_gold}`;
+        
+        allItems.push({
+            id: doc.id,
+            name: item.name,
+            level: item.minimumRequiredLevel,
+            price: item.price_gold,
+            key: itemKey
+        });
+        
+        if (duplicateItems.has(itemKey)) {
+            duplicateItems.get(itemKey).push(doc.id);
+        } else {
+            duplicateItems.set(itemKey, [doc.id]);
+        }
+    });
+    
+    console.log('📋 ALL ITEMS FOUND:', allItems);
+    console.log('🆔 DUPLICATE ANALYSIS:');
+    
+    let hasDuplicates = false;
+    duplicateItems.forEach((ids, key) => {
+        if (ids.length > 1) {
+            hasDuplicates = true;
+            console.log(`🚨 DUPLICATE: "${key}" - Document IDs:`, ids);
+        }
+    });
+    
+    if (!hasDuplicates) {
+        console.log('✅ No duplicates found in Firestore data');
+        console.log('🔧 The issue might be in the rendering logic');
+    }
+};
 
 function getCorrectImagePath(documentId, category, itemData, context = 'shop') {
     let imagePath = '';
@@ -2389,6 +2495,7 @@ Rewards:
 ❤️ -${track.conditionCost || 0} Condition
 
 Cooldown: ${formatCooldown(track.cooldown || 0)}`);
+window.trackTrainingComplete();
 }
 
 async function loadTrainingHistory() {
@@ -2486,6 +2593,7 @@ window.upgradeStat = async function(statName) {
             await updateDoc(userRef, { gold: userData.gold - upgradeCost, stats: updatedStats });
             alert(`✅ ${statName.toUpperCase()} upgraded to level ${currentLevel + 1} for ${upgradeCost} gold!`);
             await loadPlayerData(user.uid);
+            window.trackStatUpgrade();
         }
     } catch (error) {
         alert('Error upgrading stat: ' + error.message);
@@ -2531,8 +2639,7 @@ function updateUpgradeButtons() {
     }, 100);
 }
 
-// ========== ENHANCED INVENTORY DISPLAY ==========
-// FIXED: Enhanced inventory display with proper image handling
+// ========== ENHANCED INVENTORY DISPLAY WITH CONSUMABLE SUPPORT ==========
 function displayInventory(items) {
     const inventoryGrid = document.getElementById('inventory-grid');
     const inventoryCount = document.getElementById('inventory-count');
@@ -2566,6 +2673,8 @@ function displayInventory(items) {
     const inventoryHTML = filteredItems.map(item => {
         const rarity = item.rarity || 'common';
         const isEquipped = item.equipped;
+        const isConsumable = item.type === 'consumable';
+        const quantity = item.quantity || 1;
         
         // Get image path for the item
         const imagePath = getInventoryImagePath(item);
@@ -2581,9 +2690,9 @@ function displayInventory(items) {
         
         const color = rarityColors[rarity] || '#888888';
         
-        // Calculate stat bonuses
-        let statBonusText = '';
-        if (item.stats) {
+        // Calculate stat bonuses (for equipment) or effects (for consumables)
+        let bonusText = '';
+        if (item.stats && !isConsumable) {
             const bonuses = [];
             Object.entries(item.stats).forEach(([stat, value]) => {
                 if (value > 0) {
@@ -2591,12 +2700,18 @@ function displayInventory(items) {
                 }
             });
             if (bonuses.length > 0) {
-                statBonusText = `<div class="item-bonuses">${bonuses.join(', ')}</div>`;
+                bonusText = `<div class="item-bonuses">${bonuses.join(', ')}</div>`;
+            }
+        } else if (isConsumable && item.effect) {
+            // Show consumable effect
+            const effectText = getConsumableEffectText(item);
+            if (effectText) {
+                bonusText = `<div class="item-effect">${effectText}</div>`;
             }
         }
         
         return `
-            <div class="inventory-item ${isEquipped ? 'equipped' : ''}" data-item-id="${item.id}" data-item-type="${item.type}">
+            <div class="inventory-item ${isEquipped ? 'equipped' : ''} ${isConsumable ? 'consumable' : ''}" data-item-id="${item.id}" data-item-type="${item.type}">
                 <div class="item-rarity" style="color: ${color}; border-color: ${color};">
                     ${rarity.toUpperCase()}
                 </div>
@@ -2608,19 +2723,25 @@ function displayInventory(items) {
                     <div class="item-fallback-icon" style="display: none;">
                         <i class="${getItemIcon(item.type)}"></i>
                     </div>
+                    ${isConsumable && quantity > 1 ? `<div class="item-quantity">x${quantity}</div>` : ''}
                 </div>
                 <div class="item-name">${item.name}</div>
                 <div class="item-type">${formatItemType(item.type)}</div>
                 ${isEquipped ? '<div class="equipped-badge">EQUIPPED</div>' : ''}
-                ${statBonusText}
+                ${bonusText}
                 <div class="item-actions">
-                    ${isEquipped ? 
-                        `<button class="inventory-btn unequip-btn" onclick="unequipItem('${item.id}', '${item.type}')">
-                            <i class="fas fa-times"></i> Unequip
+                    ${isConsumable ? 
+                        `<button class="inventory-btn use-btn" onclick="useConsumableItem('${item.id}')">
+                            <i class="fas fa-bolt"></i> Use
                          </button>` :
-                        `<button class="inventory-btn equip-btn" onclick="equipItem('${item.id}', '${item.type}')">
-                            <i class="fas fa-check"></i> Equip
-                         </button>`
+                        (isEquipped ? 
+                            `<button class="inventory-btn unequip-btn" onclick="unequipItem('${item.id}', '${item.type}')">
+                                <i class="fas fa-times"></i> Unequip
+                             </button>` :
+                            `<button class="inventory-btn equip-btn" onclick="equipItem('${item.id}', '${item.type}')">
+                                <i class="fas fa-check"></i> Equip
+                             </button>`
+                        )
                     }
                     <button class="inventory-btn sell-inv-btn" onclick="sellInventoryItem('${item.id}', '${item.type}', '${item.name}')" ${isEquipped ? 'disabled' : ''}>
                         <i class="fas fa-coins"></i> ${isEquipped ? 'Equipped' : 'Sell'}
@@ -2720,8 +2841,13 @@ function getInventoryImagePath(item) {
 
 function formatItemType(type) {
     const typeMap = {
-        'car': 'Car', 'engine': 'Engine', 'tire': 'Tires', 'turbo': 'Turbo',
-        'suspension': 'Suspension', 'seat': 'Seats'
+        'car': 'Car', 
+        'engine': 'Engine', 
+        'tire': 'Tires', 
+        'turbo': 'Turbo',
+        'suspension': 'Suspension', 
+        'seat': 'Seats',
+        'consumable': 'Consumable'
     };
     return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1);
 }
@@ -2848,9 +2974,14 @@ window.sellInventoryItem = async function(itemId, itemType, itemName) {
 
 function getItemIcon(itemType) {
     const icons = {
-        'car': 'fas fa-car', 'engine': 'fas fa-cogs', 'tire': 'fas fa-circle',
-        'turbo': 'fas fa-bolt', 'suspension': 'fas fa-compress-alt', 
-        'seat': 'fas fa-chair', 'default': 'fas fa-box'
+        'car': 'fas fa-car', 
+        'engine': 'fas fa-cogs', 
+        'tire': 'fas fa-circle',
+        'turbo': 'fas fa-bolt', 
+        'suspension': 'fas fa-compress-alt', 
+        'seat': 'fas fa-chair', 
+        'consumable': 'fas fa-potion',
+        'default': 'fas fa-box'
     };
     return icons[itemType] || icons.default;
 }
@@ -2914,6 +3045,326 @@ function updateEnhancedStatsDisplay(userData) {
         }
     }
 }
+
+// ========== CONSUMABLE USAGE SYSTEM ==========
+window.useConsumableItem = async function(itemId) {
+    const user = auth.currentUser;
+    if (!user) {
+        alert('Please log in to use items.');
+        return;
+    }
+
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const inventory = userData.inventory || [];
+            const consumable = inventory.find(item => item.id === itemId && item.type === 'consumable');
+            
+            if (!consumable) {
+                alert('Item not found in inventory!');
+                return;
+            }
+
+            // Check if player has at least one
+            const currentQuantity = consumable.quantity || 1;
+            if (currentQuantity <= 0) {
+                alert('You don\'t have any of this item left!');
+                return;
+            }
+
+            // Apply the consumable effect
+            const success = await applyConsumableEffect(user.uid, consumable, userData);
+            
+            if (success) {
+                // Update inventory - remove one or remove item if last one
+                const updatedInventory = inventory.map(item => {
+                    if (item.id === itemId && item.type === 'consumable') {
+                        const newQuantity = (item.quantity || 1) - 1;
+                        if (newQuantity <= 0) {
+                            return null; // Mark for removal
+                        }
+                        return { ...item, quantity: newQuantity };
+                    }
+                    return item;
+                }).filter(item => item !== null); // Remove null items
+
+                await updateDoc(userRef, { inventory: updatedInventory });
+                await loadPlayerData(user.uid);
+                
+                // Show success message
+                showConsumableEffectMessage(consumable);
+            }
+        }
+    } catch (error) {
+        console.error('Error using consumable:', error);
+        alert('Error using item: ' + error.message);
+    }
+}
+
+// Apply consumable effects based on item data
+async function applyConsumableEffect(userId, consumable, userData) {
+    const userRef = doc(db, "users", userId);
+    const updateData = {};
+    
+    if (!consumable.effect) {
+        console.error('Consumable has no effect data:', consumable);
+        return false;
+    }
+
+    try {
+        switch(consumable.effect.type) {
+            case 'condition_restore':
+                // Repair kit - restore condition
+                const restoreAmount = consumable.effect.value;
+                const currentCondition = userData.condition || 0;
+                const newCondition = Math.min(100, currentCondition + restoreAmount);
+                
+                updateData.condition = newCondition;
+                console.log(`🔧 Condition restored: ${currentCondition}% → ${newCondition}%`);
+                break;
+                
+            case 'stat_boost':
+                // Temporary stat boosts (future feature)
+                console.log('📈 Stat boost applied:', consumable.effect);
+                break;
+                
+            case 'energy_restore':
+                // Energy restoration (future feature)
+                console.log('⚡ Energy restored:', consumable.effect);
+                break;
+                
+            default:
+                console.warn('Unknown consumable effect type:', consumable.effect.type);
+                return false;
+        }
+        
+        // Apply the updates to Firestore
+        if (Object.keys(updateData).length > 0) {
+            await updateDoc(userRef, updateData);
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error applying consumable effect:', error);
+        return false;
+    }
+}
+
+// Show visual feedback when consumable is used
+function showConsumableEffectMessage(consumable) {
+    const message = document.createElement('div');
+    message.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #00ff88, #00ffff);
+        color: #1a1a2e;
+        padding: 1.5rem 2rem;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 255, 255, 0.4);
+        z-index: 10000;
+        animation: popIn 0.5s ease;
+        text-align: center;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: bold;
+        font-size: 1.2rem;
+        max-width: 300px;
+    `;
+    
+    let effectText = '';
+    if (consumable.effect) {
+        switch(consumable.effect.type) {
+            case 'condition_restore':
+                effectText = `Condition +${consumable.effect.value}%`;
+                break;
+            case 'stat_boost':
+                effectText = 'Stats boosted!';
+                break;
+            case 'energy_restore':
+                effectText = 'Energy restored!';
+                break;
+            default:
+                effectText = 'Effect applied!';
+        }
+    }
+    
+    message.innerHTML = `
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+        <div>${consumable.name} Used!</div>
+        <div style="font-size: 1rem; margin-top: 0.5rem; color: #1a1a2e;">${effectText}</div>
+    `;
+    
+    document.body.appendChild(message);
+    
+    setTimeout(() => {
+        if (message.parentNode) {
+            message.remove();
+        }
+    }, 3000);
+}
+
+// Helper function to display consumable effect text
+function getConsumableEffectText(item) {
+    if (!item.effect) return '';
+    
+    switch(item.effect.type) {
+        case 'condition_restore':
+            return `Restores ${item.effect.value}% condition`;
+        case 'stat_boost':
+            return `Boosts stats temporarily`;
+        case 'energy_restore':
+            return `Restores energy`;
+        default:
+            return 'Consumable item';
+    }
+}
+
+// Add CSS for consumable-specific styles
+const consumableCSS = `
+    .inventory-item.consumable {
+        border: 2px solid #a29bfe;
+        background: linear-gradient(135deg, #1a1a2e, #2d1b33);
+    }
+    
+    .inventory-item.consumable .item-image-container {
+        position: relative;
+    }
+    
+    .item-quantity {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background: rgba(255, 107, 53, 0.9);
+        color: white;
+        border-radius: 12px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        border: 1px solid #1a1a2e;
+        min-width: 20px;
+        text-align: center;
+        z-index: 10;
+    }
+    
+    .item-effect {
+        font-size: 0.8rem;
+        color: #a29bfe;
+        margin-top: 5px;
+        text-align: center;
+    }
+    
+    .use-btn {
+        background: linear-gradient(135deg, #a29bfe, #6c5ce7) !important;
+    }
+    
+    .use-btn:hover {
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe) !important;
+    }
+    
+    @keyframes popIn {
+        0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+        70% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+`;
+
+// ========== DEBUG: ADD TEST CONSUMABLES TO INVENTORY ==========
+window.addTestConsumables = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        alert('Please log in first!');
+        return;
+    }
+
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const inventory = userData.inventory || [];
+            
+            // Add test repair kits
+            const testConsumables = [
+                {
+                    id: 'repair_kit',
+                    name: 'Repair Kit',
+                    type: 'consumable',
+                    rarity: 'common',
+                    effect: {
+                        type: 'condition_restore',
+                        value: 40
+                    },
+                    quantity: 3,
+                    description: 'Restores 40% condition instantly'
+                },
+                {
+                    id: 'advanced_repair_kit',
+                    name: 'Advanced Repair Kit', 
+                    type: 'consumable',
+                    rarity: 'rare',
+                    effect: {
+                        type: 'condition_restore',
+                        value: 100
+                    },
+                    quantity: 1,
+                    description: 'Fully restores condition to 100% instantly'
+                }
+            ];
+            
+            // Add to inventory (avoid duplicates)
+            let updatedInventory = [...inventory];
+            testConsumables.forEach(newItem => {
+                const existingIndex = updatedInventory.findIndex(item => 
+                    item.id === newItem.id && item.type === newItem.type
+                );
+                
+                if (existingIndex >= 0) {
+                    // Update quantity if exists
+                    updatedInventory[existingIndex].quantity = 
+                        (updatedInventory[existingIndex].quantity || 1) + newItem.quantity;
+                } else {
+                    // Add new item
+                    updatedInventory.push(newItem);
+                }
+            });
+            
+            await updateDoc(userRef, { inventory: updatedInventory });
+            await loadPlayerData(user.uid);
+            
+            alert('🎁 Test consumables added to inventory!\n\n- 3x Repair Kit (40% condition)\n- 1x Advanced Repair Kit (100% condition)\n\nGo to Inventory to test them!');
+        }
+    } catch (error) {
+        console.error('Error adding test consumables:', error);
+        alert('Error: ' + error.message);
+    }
+};
+
+// Also add this to see your current inventory in console
+window.debugInventory = function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log('Please log in first!');
+        return;
+    }
+    
+    getDoc(doc(db, "users", user.uid)).then(doc => {
+        if (doc.exists()) {
+            const userData = doc.data();
+            console.log('📦 Current Inventory:', userData.inventory || []);
+            console.log('🔧 Current Condition:', userData.condition || 0);
+        }
+    });
+};
+
+console.log('🔧 Debug commands available:');
+console.log('addTestConsumables() - Add repair kits to test');
+console.log('debugInventory() - Show current inventory in console');
 
 // ========== PVP RACING SYSTEM ==========
 let currentChallenge = null;
@@ -3204,10 +3655,12 @@ async function startPVPRace(challengeId, challenge) {
                 await updateDoc(doc(db, "users", user.uid), {
                     condition: userData.condition - challenge.conditionCost,
                     gold: userData.gold + rewards.goldTransfer,
-                    fame: (userData.fame || 0) + rewards.fameTransfer
+                    fame: (userData.fame || 0) + rewards.fameTransfer        
                 });
                 await addXP(user.uid, rewards.xpReward);
                 console.log('🏆 User won: Gained gold, fame, and XP');
+                 window.trackPVPWin();
+
             } else {
                 // User is loser - lose gold
                 await updateDoc(doc(db, "users", user.uid), {
@@ -3369,52 +3822,668 @@ function getRandomTrack() {
     return tracks[Math.floor(Math.random() * tracks.length)];
 }
 
-// ========== DAILY CHALLENGES SYSTEM ==========
+// ========== ENHANCED DAILY CHALLENGES SYSTEM ==========
 let dailyChallenges = [];
+let challengeProgress = {};
+let lastChallengeReset = null;
 
-async function loadDailyChallenges() {
+// All possible challenges pool
+const CHALLENGE_POOL = [
+    // Training challenges
+    {
+        id: 'training_beginner',
+        title: 'Training Rookie',
+        description: 'Complete 2 training sessions',
+        type: 'training_complete',
+        target: 2,
+        reward: { gold: 40, xp: 20, tokens: 1 },
+        difficulty: 'easy'
+    },
+    {
+        id: 'training_pro',
+        title: 'Training Pro',
+        description: 'Complete 5 training sessions',
+        type: 'training_complete',
+        target: 5,
+        reward: { gold: 80, xp: 40, tokens: 2 },
+        difficulty: 'medium'
+    },
+    {
+        id: 'training_master',
+        title: 'Training Master',
+        description: 'Complete 10 training sessions',
+        type: 'training_complete',
+        target: 10,
+        reward: { gold: 150, xp: 75, tokens: 3 },
+        difficulty: 'hard'
+    },
+
+    // Shopping challenges
+    {
+        id: 'shopper',
+        title: 'Shopper',
+        description: 'Purchase 1 new item',
+        type: 'item_purchase',
+        target: 1,
+        reward: { gold: 30, xp: 15, tokens: 1 },
+        difficulty: 'easy'
+    },
+    {
+        id: 'collector',
+        title: 'Collector',
+        description: 'Purchase 3 new items',
+        type: 'item_purchase',
+        target: 3,
+        reward: { gold: 70, xp: 35, tokens: 2 },
+        difficulty: 'medium'
+    },
+    {
+        id: 'gear_enthusiast',
+        title: 'Gear Enthusiast',
+        description: 'Purchase 5 new items',
+        type: 'item_purchase',
+        target: 5,
+        reward: { gold: 120, xp: 60, tokens: 3 },
+        difficulty: 'hard'
+    },
+
+    // PVP challenges
+    {
+        id: 'pvp_beginner',
+        title: 'PVP Rookie',
+        description: 'Win 1 PVP race',
+        type: 'pvp_win',
+        target: 1,
+        reward: { gold: 50, xp: 25, tokens: 1, fame: 40 },
+        difficulty: 'easy'
+    },
+    {
+        id: 'pvp_warrior',
+        title: 'PVP Warrior',
+        description: 'Win 3 PVP races',
+        type: 'pvp_win',
+        target: 3,
+        reward: { gold: 100, xp: 50, tokens: 2, fame: 80 },
+        difficulty: 'medium'
+    },
+    {
+        id: 'pvp_champion',
+        title: 'PVP Champion',
+        description: 'Win 5 PVP races',
+        type: 'pvp_win',
+        target: 5,
+        reward: { gold: 200, xp: 100, tokens: 4, fame: 150 },
+        difficulty: 'hard'
+    },
+
+    // Stat challenges
+    {
+        id: 'stat_learner',
+        title: 'Stat Learner',
+        description: 'Upgrade any stat 1 time',
+        type: 'stat_upgrade',
+        target: 1,
+        reward: { gold: 40, xp: 20, tokens: 1 },
+        difficulty: 'easy'
+    },
+    {
+        id: 'stat_trained',
+        title: 'Stat Trained',
+        description: 'Upgrade any stat 3 times',
+        type: 'stat_upgrade',
+        target: 3,
+        reward: { gold: 90, xp: 45, tokens: 2 },
+        difficulty: 'medium'
+    },
+    {
+        id: 'stat_master',
+        title: 'Stat Master',
+        description: 'Upgrade any stat 5 times',
+        type: 'stat_upgrade',
+        target: 5,
+        reward: { gold: 150, xp: 75, tokens: 3 },
+        difficulty: 'hard'
+    },
+
+    // Condition challenges
+    {
+        id: 'condition_care',
+        title: 'Condition Care',
+        description: 'Maintain above 80% condition for 30 minutes',
+        type: 'condition_maintain',
+        target: 1800, // 30 minutes in seconds
+        reward: { gold: 40, xp: 20, tokens: 1 },
+        difficulty: 'easy'
+    },
+    {
+        id: 'condition_expert',
+        title: 'Condition Expert',
+        description: 'Maintain above 80% condition for 2 hours',
+        type: 'condition_maintain',
+        target: 7200, // 2 hours in seconds
+        reward: {item: 'repair_kit' },
+        difficulty: 'medium'
+    },
+    {
+        id: 'condition_master',
+        title: 'Condition Master',
+        description: 'Maintain above 80% condition for 4 hours',
+        type: 'condition_maintain',
+        target: 14400, // 4 hours in seconds
+        reward: { item: 'advanced_repair_kit' },
+        difficulty: 'hard'
+    },
+
+    // Mixed challenges
+    {
+        id: 'all_rounder',
+        title: 'All-Rounder',
+        description: 'Complete 2 training sessions and win 1 PVP race',
+        type: 'mixed_activities',
+        target: 3,
+        reward: { gold: 120, xp: 60, tokens: 2, fame: 100},
+        difficulty: 'medium'
+    },
+    {
+        id: 'pro_racer',
+        title: 'Pro Racer',
+        description: 'Win 2 PVP races and upgrade 2 stats',
+        type: 'mixed_activities',
+        target: 4,
+        reward: { gold: 180, xp: 90, tokens: 3, fame: 200},
+        difficulty: 'hard'
+    },
+
+    // SPECIAL CHALLENGES - Item Rewards Only
+    {
+        id: 'power_demon',
+        title: '💪 Power Demon',
+        description: 'Complete 3 training sessions with Power stat ≥ 35',
+        type: 'special_training',
+        target: 3,
+        reward: { 
+            item: 'turbo_twister'
+        },
+        difficulty: 'special',
+        rarity: 0.1,
+        conditions: {
+            minStats: { power: 20 }
+        }
+    },
+    {
+        id: 'handling_master',
+        title: '🌀 Handling Master', 
+        description: 'Win 2 PVP races with Handling stat ≥ 30',
+        type: 'special_pvp',
+        target: 2,
+        reward: {
+            item: 'precision_gears'
+        },
+        difficulty: 'special',
+        rarity: 0.08,
+        conditions: {
+            minStats: { handling: 15 }
+        }
+    },
+    {
+        id: 'desert_expert',
+        title: '🏜️ Desert Expert',
+        description: 'Win 2 race with Desert Stormer equipped',
+        type: 'special_equipment',
+        target: 2,
+        reward: {
+            item: 'sandstorm_exhaust'
+        },
+        difficulty: 'special',
+        rarity: 0.05,
+        conditions: {
+            // NO conditions for appearance - anyone can see it!
+        }
+    },
+    {
+        id: 'nocturnal_racer',
+        title: '🌙 Nocturnal Racer',
+        description: 'Complete 3 trainings between 10PM-4AM',
+        type: 'special_time',
+        target: 3,
+        reward: {
+            item: 'moonlight_tires'
+        },
+        difficulty: 'special', 
+        rarity: 0.07,
+        conditions: {
+            // NO conditions for appearance - anyone can see it!
+        }
+    }
+];
+
+// Initialize daily challenges with rotation
+async function initializeDailyChallenges() {
+    await checkChallengeReset();
+    await loadChallengeProgress();
+    startChallengeTracking();
+    startMissionsAutoRefresh();
+}
+
+// Check if challenges need to be reset (daily)
+async function checkChallengeReset() {
+    const user = auth.currentUser;
+    if (!user) return;
+
     try {
-        // In a real game, you'd fetch these from Firestore
-        // For now, we'll generate some random challenges
-        dailyChallenges = [
-            {
-                id: 'dc1',
-                title: 'Speed Demon',
-                description: 'Complete 3 training sessions',
-                type: 'training',
-                target: 3,
-                progress: 0,
-                reward: { gold: 50, xp: 25, tokens: 1 },
-                completed: false
-            },
-            {
-                id: 'dc2', 
-                title: 'Gear Collector',
-                description: 'Purchase 2 new items from shop',
-                type: 'purchase',
-                target: 2,
-                progress: 0,
-                reward: { gold: 75, xp: 30, tokens: 2 },
-                completed: false
-            },
-            {
-                id: 'dc3',
-                title: 'Racing Rival',
-                description: 'Win 2 PVP races',
-                type: 'pvp_win',
-                target: 2,
-                progress: 0,
-                reward: { gold: 100, xp: 50, tokens: 3 },
-                completed: false
-            }
-        ];
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.exists() ? userDoc.data() : {};
         
-        displayDailyChallenges();
+        const lastReset = userData.lastChallengeReset;
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        
+        // Reset if never reset before or if it's a new day
+        if (!lastReset || lastReset.toDate().getTime() < today) {
+            console.log('🔄 Resetting daily challenges for new day');
+            await generateDailyChallenges();
+            await updateDoc(doc(db, "users", user.uid), {
+                lastChallengeReset: serverTimestamp()
+            });
+        } else {
+            await loadDailyChallenges();
+        }
+    } catch (error) {
+        console.error('Error checking challenge reset:', error);
+        await loadDailyChallenges(); // Fallback
+    }
+}
+
+// Generate random daily challenges WITH SPECIAL CHALLENGES
+async function generateDailyChallenges() {
+    // Clear existing progress
+    challengeProgress = {};
+    
+    // Select 5 random challenges with balanced difficulty
+    const selectedChallenges = [];
+    const difficulties = ['easy', 'medium', 'hard'];
+    
+    difficulties.forEach(difficulty => {
+        const difficultyChallenges = CHALLENGE_POOL.filter(c => c.difficulty === difficulty && !c.rarity);
+        const randomChallenge = difficultyChallenges[Math.floor(Math.random() * difficultyChallenges.length)];
+        if (randomChallenge) {
+            selectedChallenges.push({
+                ...randomChallenge,
+                progress: 0,
+                completed: false,
+                claimed: false
+            });
+        }
+    });
+    
+    // Add 2 more random challenges of any difficulty (non-special)
+    const remainingChallenges = CHALLENGE_POOL.filter(c => !c.rarity && !selectedChallenges.some(sc => sc.id === c.id));
+    for (let i = 0; i < 2 && remainingChallenges.length > 0; i++) {
+        const randomIndex = Math.floor(Math.random() * remainingChallenges.length);
+        selectedChallenges.push({
+            ...remainingChallenges[randomIndex],
+            progress: 0,
+            completed: false,
+            claimed: false
+        });
+        remainingChallenges.splice(randomIndex, 1);
+    }
+    
+    // 🎰 SPECIAL CHALLENGE ROLL - 25% chance to get one
+    if (Math.random() < 0.25) {
+        const specialChallenges = CHALLENGE_POOL.filter(c => c.rarity);
+        let selectedSpecial = null;
+        
+        // Weighted random selection based on rarity
+        const totalRarity = specialChallenges.reduce((sum, challenge) => sum + challenge.rarity, 0);
+        let random = Math.random() * totalRarity;
+        
+        for (const challenge of specialChallenges) {
+            random -= challenge.rarity;
+            if (random <= 0) {
+                selectedSpecial = challenge;
+                break;
+            }
+        }
+        
+        if (selectedSpecial) {
+            // Check if player meets conditions before offering
+            const canUnlock = await checkSpecialChallengeConditions(selectedSpecial);
+            if (canUnlock) {
+                selectedChallenges.push({
+                    ...selectedSpecial,
+                    progress: 0,
+                    completed: false,
+                    claimed: false,
+                    isSpecial: true
+                });
+                console.log(`🎰 SPECIAL CHALLENGE UNLOCKED: ${selectedSpecial.title}`);
+            }
+        }
+    }
+    
+    dailyChallenges = selectedChallenges;
+    
+    // Initialize progress for new challenges
+    dailyChallenges.forEach(challenge => {
+        challengeProgress[challenge.id] = {
+            progress: 0,
+            completed: false,
+            claimed: false,
+            assignedAt: Date.now()
+        };
+    });
+    
+    console.log('🎲 Generated new daily challenges:', dailyChallenges.map(c => c.title));
+    await saveChallengeProgress();
+    displayDailyChallenges();
+}
+
+// SIMPLIFIED: Check if player meets special challenge conditions (FOR APPEARANCE ONLY)
+async function checkSpecialChallengeConditions(challenge) {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) return false;
+        
+        const userData = userDoc.data();
+        const conditions = challenge.conditions;
+        
+        // If no conditions, always show the challenge
+        if (!conditions || Object.keys(conditions).length === 0) {
+            console.log(`✅ No conditions - showing challenge: ${challenge.title}`);
+            return true;
+        }
+        
+        // Only check stat requirements for appearance
+        if (conditions.minStats) {
+            for (const [stat, minValue] of Object.entries(conditions.minStats)) {
+                if ((userData[stat] || 0) < minValue) {
+                    console.log(`❌ Special challenge hidden: ${stat} ${userData[stat]} < ${minValue}`);
+                    return false;
+                }
+            }
+        }
+        
+        console.log(`✅ Conditions met - showing challenge: ${challenge.title}`);
+        return true;
+        
+    } catch (error) {
+        console.error('Error checking special challenge conditions:', error);
+        return false;
+    }
+}
+
+// Check special challenge requirements DURING completion (not just for appearance)
+async function checkSpecialChallengeCompletion(challenge) {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) return false;
+        
+        const userData = userDoc.data();
+        
+        // Check car requirement for desert_expert challenge
+        if (challenge.id === 'desert_expert') {
+            const equippedCar = userData.equippedCar || userData.currentCar || userData.car || userData.vehicle;
+            if (equippedCar !== 'desert_stormer') {
+                console.log(`🚗 Car requirement not met: need desert_stormer, have ${equippedCar}`);
+                return false;
+            }
+        }
+        
+        // Check time requirement for nocturnal_racer challenge  
+        if (challenge.id === 'nocturnal_racer') {
+            const now = new Date();
+            const currentHour = now.getHours();
+            // 10PM-4AM window (overnight)
+            if (!(currentHour >= 22 || currentHour < 4)) {
+                console.log(`⏰ Time requirement not met: need 10PM-4AM, current hour: ${currentHour}`);
+                return false;
+            }
+        }
+        
+        // Check stat requirements for power/handling challenges during completion
+        if (challenge.conditions && challenge.conditions.minStats) {
+            for (const [stat, minValue] of Object.entries(challenge.conditions.minStats)) {
+                const userStat = userData[stat] || userData[`${stat}Stat`] || userData[`${stat}_stat`] || 0;
+                if (userStat < minValue) {
+                    console.log(`📊 Stat requirement not met: ${stat} ${userStat} < ${minValue}`);
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error checking special challenge completion:', error);
+        return false;
+    }
+}
+
+// Load daily challenges from progress
+async function loadDailyChallenges() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            challengeProgress = userData.challengeProgress || {};
+            
+            // Reconstruct challenges from progress
+            dailyChallenges = [];
+            Object.keys(challengeProgress).forEach(challengeId => {
+                const template = CHALLENGE_POOL.find(c => c.id === challengeId);
+                if (template) {
+                    const progressData = challengeProgress[challengeId];
+                    dailyChallenges.push({
+                        ...template,
+                        progress: progressData.progress || 0,
+                        completed: progressData.completed || false,
+                        claimed: progressData.claimed || false
+                    });
+                }
+            });
+            
+            // If no challenges exist, generate new ones
+            if (dailyChallenges.length === 0) {
+                await generateDailyChallenges();
+            }
+            
+            console.log('📋 Loaded daily challenges:', dailyChallenges.length);
+            displayDailyChallenges();
+        }
     } catch (error) {
         console.error('Error loading daily challenges:', error);
     }
 }
 
+// Load player's challenge progress from Firestore
+async function loadChallengeProgress() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            challengeProgress = userData.challengeProgress || {};
+            
+            // Update challenges with current progress
+            dailyChallenges.forEach(challenge => {
+                if (challengeProgress[challenge.id]) {
+                    challenge.progress = challengeProgress[challenge.id].progress || 0;
+                    challenge.completed = challengeProgress[challenge.id].completed || false;
+                    challenge.claimed = challengeProgress[challenge.id].claimed || false;
+                }
+            });
+            
+            console.log('📊 Challenge progress loaded:', challengeProgress);
+            displayDailyChallenges(); // Refresh display after loading progress
+        }
+    } catch (error) {
+        console.error('Error loading challenge progress:', error);
+    }
+}
+
+// Save challenge progress to Firestore
+async function saveChallengeProgress() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        await updateDoc(doc(db, "users", user.uid), {
+            challengeProgress: challengeProgress,
+            lastChallengeUpdate: serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error saving challenge progress:', error);
+    }
+}
+
+// Start tracking game events for challenges
+function startChallengeTracking() {
+    console.log('🎯 Starting challenge event tracking...');
+    
+    // Track training sessions
+    window.trackTrainingComplete = function() {
+        updateChallengeProgress('training_complete', 1);
+    };
+    
+    // Track item purchases
+    window.trackItemPurchase = function() {
+        updateChallengeProgress('item_purchase', 1);
+    };
+    
+    // Track PVP wins
+    window.trackPVPWin = function() {
+        updateChallengeProgress('pvp_win', 1);
+    };
+    
+    // Track stat upgrades
+    window.trackStatUpgrade = function() {
+        updateChallengeProgress('stat_upgrade', 1);
+    };
+    
+    // Track condition maintenance (check every minute)
+    setInterval(() => {
+        trackConditionMaintenance();
+    }, 60000);
+}
+
+// Enhanced progress tracking with special challenge completion checks
+async function updateChallengeProgress(challengeType, amount = 1) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    console.log(`📈 Updating challenge: ${challengeType} +${amount}`);
+    
+    let updated = false;
+    
+    for (const challenge of dailyChallenges) {
+        if (!challenge.completed && !challenge.claimed) {
+            let shouldUpdate = false;
+            
+            // Regular challenge type matching
+            if (challenge.type === challengeType) {
+                shouldUpdate = true;
+            }
+            // Mixed activities challenge
+            else if (challenge.type === 'mixed_activities' && 
+                    (challengeType === 'training_complete' || 
+                     challengeType === 'pvp_win' || 
+                     challengeType === 'stat_upgrade')) {
+                shouldUpdate = true;
+            }
+            // Special challenges
+            else if (challenge.type.startsWith('special_') && 
+                    challengeType === challenge.type.replace('special_', '')) {
+                shouldUpdate = true;
+            }
+            
+            if (shouldUpdate) {
+                // For special challenges, check car/time requirements at progress time
+                if (challenge.isSpecial && !await checkSpecialChallengeCompletion(challenge)) {
+                    console.log(`⏸️ Special challenge progress paused - requirements not met: ${challenge.title}`);
+                    continue; // Skip this challenge if requirements aren't met
+                }
+                
+                const oldProgress = challenge.progress;
+                challenge.progress = Math.min(challenge.target, challenge.progress + amount);
+                
+                // Check if challenge is now completed
+                if (challenge.progress >= challenge.target && !challenge.completed) {
+                    challenge.completed = true;
+                    console.log(`🎉 Challenge completed: ${challenge.title}`);
+                    showChallengeCompleteNotification(challenge);
+                }
+                
+                // Update progress in storage
+                challengeProgress[challenge.id] = {
+                    progress: challenge.progress,
+                    completed: challenge.completed,
+                    claimed: challenge.claimed,
+                    lastUpdated: Date.now()
+                };
+                
+                updated = true;
+                
+                console.log(`   ${challenge.title}: ${oldProgress} → ${challenge.progress}/${challenge.target}`);
+            }
+        }
+    }
+    
+    if (updated) {
+        await saveChallengeProgress();
+        displayDailyChallenges();
+    }
+}
+
+// Track condition maintenance
+async function trackConditionMaintenance() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const condition = userData.condition || 0;
+            
+            if (condition >= 80) {
+                // Add 60 seconds (1 minute) to condition maintenance progress
+                updateChallengeProgress('condition_maintain', 60);
+            } else {
+                // Reset progress if condition drops below 80%
+                dailyChallenges.forEach(challenge => {
+                    if (challenge.type === 'condition_maintain' && !challenge.completed) {
+                        const oldProgress = challengeProgress[challenge.id]?.progress || 0;
+                        if (oldProgress > 0) {
+                            console.log(`🔄 Resetting condition challenge - condition dropped to ${condition}%`);
+                            challenge.progress = 0;
+                            challengeProgress[challenge.id] = {
+                                progress: 0,
+                                completed: false,
+                                claimed: false
+                            };
+                        }
+                    }
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error tracking condition:', error);
+    }
+}
+
+// Display daily challenges with progress
 function displayDailyChallenges() {
     const challengesContainer = document.getElementById('daily-challenges');
     if (!challengesContainer) return;
@@ -3424,35 +4493,115 @@ function displayDailyChallenges() {
         return;
     }
     
-    const challengesHTML = dailyChallenges.map(challenge => `
-        <div class="challenge-item ${challenge.completed ? 'completed' : ''}">
-            <div class="challenge-header">
-                <h4>${challenge.title}</h4>
-                <span class="challenge-progress">${challenge.progress}/${challenge.target}</span>
-            </div>
-            <p class="challenge-desc">${challenge.description}</p>
-            <div class="challenge-rewards">
-                ${challenge.reward.gold ? `<span class="reward-gold">💰 ${challenge.reward.gold}</span>` : ''}
-                ${challenge.reward.xp ? `<span class="reward-xp">⭐ ${challenge.reward.xp}</span>` : ''}
-                ${challenge.reward.tokens ? `<span class="reward-tokens">💎 ${challenge.reward.tokens}</span>` : ''}
-            </div>
-            <button class="challenge-claim-btn" 
-                    onclick="claimChallengeReward('${challenge.id}')"
-                    ${!challenge.completed ? 'disabled' : ''}>
-                ${challenge.completed ? 'Claim Reward' : 'In Progress'}
-            </button>
+    const resetTime = getNextResetTime();
+    
+    const challengesHTML = `
+        <div class="challenge-reset-info">
+            <i class="fas fa-sync-alt"></i> New challenges in: ${resetTime}
         </div>
-    `).join('');
+        ${dailyChallenges.map(challenge => {
+            const progressPercent = Math.min(100, (challenge.progress / challenge.target) * 100);
+            const isCompleted = challenge.completed && !challenge.claimed;
+            const isClaimed = challenge.claimed;
+            const isSpecial = challenge.isSpecial;
+            const hasItemReward = challenge.reward.item;
+            
+            return `
+                <div class="challenge-item ${isCompleted ? 'completed' : ''} ${isClaimed ? 'claimed' : ''} ${isSpecial ? 'special-challenge' : ''} ${hasItemReward ? 'has-item-reward' : ''}">
+                    ${isSpecial ? '<div class="special-badge">SPECIAL</div>' : ''}
+                    
+                    <div class="challenge-content ${hasItemReward ? 'with-item' : ''}">
+                        <div class="challenge-main">
+                            <div class="challenge-header">
+                                <h4>${challenge.title} 
+                                    <span class="challenge-difficulty difficulty-${challenge.difficulty}">
+                                        ${challenge.difficulty.toUpperCase()}
+                                    </span>
+                                </h4>
+                                <span class="challenge-progress">${challenge.progress}/${challenge.target}</span>
+                            </div>
+                            <p class="challenge-desc">${challenge.description}</p>
+                            <div class="progress-bar ${hasItemReward ? 'small-progress' : ''}">
+                                <div class="progress-fill" style="width: ${progressPercent}%"></div>
+                            </div>
+                            <div class="challenge-rewards">
+                                ${challenge.reward.gold ? `<span class="reward-gold">💰 ${challenge.reward.gold}</span>` : ''}
+                                ${challenge.reward.xp ? `<span class="reward-xp">⭐ ${challenge.reward.xp}</span>` : ''}
+                                ${challenge.reward.tokens ? `<span class="reward-tokens">💎 ${challenge.reward.tokens}</span>` : ''}
+                            </div>
+                        </div>
+                        
+                        ${hasItemReward ? `
+                            <div class="item-reward-preview">
+                                <div class="item-image">
+                                    <img src="images/items/${challenge.reward.item}.jpg" alt="${challenge.reward.item}" 
+                                         onerror="this.src='images/items/default.jpg'">
+                                </div>
+                                
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <button class="challenge-claim-btn" 
+                            onclick="claimChallengeReward('${challenge.id}')"
+                            ${!isCompleted ? 'disabled' : ''}>
+                        ${isClaimed ? 'Claimed ✓' : (isCompleted ? 'Claim Reward' : 'In Progress')}
+                    </button>
+                </div>
+            `;
+        }).join('')}
+    `;
     
     challengesContainer.innerHTML = challengesHTML;
 }
 
+function getNextResetTime() {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const diff = tomorrow - now;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+}
+
+// Grant item reward from database
+async function grantItemReward(userId, itemId) {
+    try {
+        // First, get item data from items collection
+        const itemDoc = await getDoc(doc(db, "items", itemId));
+        if (!itemDoc.exists()) {
+            console.error(`Item ${itemId} not found in database`);
+            return false;
+        }
+        
+        const itemData = itemDoc.data();
+        
+        // Add to user's inventory
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+            [`inventory.${itemId}`]: {
+                ...itemData,
+                obtainedAt: serverTimestamp(),
+                source: 'special_challenge'
+            }
+        });
+        
+        console.log(`🎁 Granted item: ${itemId} to user ${userId}`);
+        return true;
+        
+    } catch (error) {
+        console.error('Error granting item reward:', error);
+        return false;
+    }
+}
+
+// Claim challenge reward
 window.claimChallengeReward = async function(challengeId) {
     const user = auth.currentUser;
     if (!user) return;
     
     const challenge = dailyChallenges.find(c => c.id === challengeId);
-    if (!challenge || !challenge.completed) return;
+    if (!challenge || !challenge.completed || challenge.claimed) return;
     
     try {
         const userRef = doc(db, "users", user.uid);
@@ -3460,29 +4609,145 @@ window.claimChallengeReward = async function(challengeId) {
         
         if (userSnap.exists()) {
             const userData = userSnap.data();
-            const updateData = {
-                gold: userData.gold + challenge.reward.gold,
-                fame: userData.fame + (challenge.reward.fame || 0)
-            };
+            const updateData = {};
             
+            // Handle regular rewards
+            if (challenge.reward.gold) {
+                updateData.gold = userData.gold + challenge.reward.gold;
+            }
+            if (challenge.reward.xp) {
+                await addXP(user.uid, challenge.reward.xp);
+            }
             if (challenge.reward.tokens) {
                 updateData.tokens = (userData.tokens || 0) + challenge.reward.tokens;
             }
             
-            await updateDoc(userRef, updateData);
-            await addXP(user.uid, challenge.reward.xp);
+            // 🎁 Handle ITEM reward (for special challenges)
+            if (challenge.reward.item) {
+                await grantItemReward(user.uid, challenge.reward.item);
+            }
             
             // Mark challenge as claimed
             challenge.claimed = true;
+            challengeProgress[challenge.id].claimed = true;
+            
+            // Only update if we have regular rewards
+            if (Object.keys(updateData).length > 0) {
+                await updateDoc(userRef, updateData);
+            }
+            
+            await saveChallengeProgress();
             displayDailyChallenges();
             
-            alert(`🎉 Challenge completed! Rewards claimed!`);
+            showRewardNotification(challenge);
             await loadPlayerData(user.uid);
         }
     } catch (error) {
+        console.error('Error claiming reward:', error);
         alert('Error claiming reward: ' + error.message);
     }
 };
+
+// Show challenge completion notification
+function showChallengeCompleteNotification(challenge) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #00ff88, #00ffff);
+        color: #1a1a2e;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 255, 255, 0.3);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease;
+        cursor: pointer;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: bold;
+        max-width: 300px;
+    `;
+    
+    notification.innerHTML = `
+        <div>🎉 Challenge Complete!</div>
+        <div style="font-size: 0.9rem; margin-top: 0.5rem;">${challenge.title}</div>
+        <div style="font-size: 0.8rem; margin-top: 0.3rem;">Click to claim rewards</div>
+    `;
+    
+    notification.onclick = () => {
+        claimChallengeReward(challenge.id);
+        notification.remove();
+    };
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Show reward notification
+function showRewardNotification(challenge) {
+    let rewardText = `🎉 Rewards Claimed!\n\n${challenge.title}\n\n`;
+    
+    if (challenge.reward.gold) rewardText += `💰 +${challenge.reward.gold} Gold\n`;
+    if (challenge.reward.xp) rewardText += `⭐ +${challenge.reward.xp} XP\n`;
+    if (challenge.reward.tokens) rewardText += `💎 +${challenge.reward.tokens} Tokens\n`;
+    if (challenge.reward.item) rewardText += `🎁 +${challenge.reward.item} (New Item!)\n`;
+    
+    alert(rewardText);
+}
+
+// Auto-refresh challenges every 10 seconds when on missions page
+function startMissionsAutoRefresh() {
+    if (window.location.pathname.includes('missions.html')) {
+        setInterval(() => {
+            loadChallengeProgress().then(() => {
+                displayDailyChallenges();
+            });
+        }, 10000); // Refresh every 10 seconds
+    }
+}
+
+// Add this function to test special challenges - call it from browser console
+window.forceSpecialChallenges = async function() {
+    console.log('🎯 FORCING SPECIAL CHALLENGES FOR TESTING');
+    
+    // Clear current challenges
+    dailyChallenges = [];
+    challengeProgress = {};
+    
+    // Add ALL special challenges
+    const specialChallenges = CHALLENGE_POOL.filter(c => c.rarity);
+    
+    for (const challenge of specialChallenges) {
+        const canUnlock = await checkSpecialChallengeConditions(challenge);
+        if (canUnlock) {
+            dailyChallenges.push({
+                ...challenge,
+                progress: 0,
+                completed: false,
+                claimed: false,
+                isSpecial: true
+            });
+            
+            challengeProgress[challenge.id] = {
+                progress: 0,
+                completed: false,
+                claimed: false,
+                assignedAt: Date.now()
+            };
+        }
+    }
+    
+    await saveChallengeProgress();
+    displayDailyChallenges();
+    console.log('✅ Special challenges forced:', dailyChallenges.map(c => c.title));
+};
+
+// Call this from browser console: forceSpecialChallenges()
 
 // ========== PVP CHALLENGES DISPLAY ==========
 async function loadPVPChallenges() {
@@ -5089,6 +6354,9 @@ console.log(`
 • debugTutorial.resetTutorial() - Reset completion status
 `);
 
+
+
+
 // ========== APPLICATION INITIALIZATION ==========
 function initializePage() {
     const path = window.location.pathname;
@@ -5100,6 +6368,9 @@ function initializePage() {
     }
     else if (path.includes('training.html')) initializeTraining();
     else if (document.getElementById('inventory-grid')) initializeInventory();
+
+     // Initialize daily challenges
+    initializeDailyChallenges();
 
     // Load challenges with error handling
     setTimeout(() => {
