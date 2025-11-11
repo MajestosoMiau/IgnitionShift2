@@ -1680,7 +1680,6 @@ window.debugShopItems = async function(category) {
     return allItems;
 };
 
-// Replace the showCategory function with this FIXED version:
 window.showCategory = async function(category, buttonElement) {
     if (buttonElement) updateActiveTab(buttonElement);
     
@@ -1712,11 +1711,14 @@ window.showCategory = async function(category, buttonElement) {
             const item = doc.data();
             const documentId = doc.id;
             
-            // 🚫 STRICTER FILTERING - Check if item is challenge-only
-            if (isChallengeOnlyItem(documentId, category.slice(0, -1))) {
-                console.log(`🚫 FILTERED OUT CHALLENGE-ONLY ITEM: ${item.name} (${documentId})`);
+            // 🚫 SIMPLE FILTERING: Skip items that have ANY source field
+            // (assuming only challenge/quest items will have this field)
+            if (item.source) {
+                console.log(`🚫 FILTERED OUT SPECIAL ITEM: ${item.name} (Source: ${item.source})`);
                 return; // Skip this item entirely
             }
+            
+            // Only show items with NO source field (regular shop items)
             
             const itemKey = `${item.name}_${item.minimumRequiredLevel}_${item.price_gold}`;
             
@@ -1736,7 +1738,7 @@ window.showCategory = async function(category, buttonElement) {
             });
         });
 
-        console.log(`🛍️ Processed ${itemsArray.length} items after filtering challenge-only items`);
+        console.log(`🛍️ Processed ${itemsArray.length} regular shop items after filtering special items`);
 
         // Sort by minimumRequiredLevel (lowest to highest)
         itemsArray.sort((a, b) => {
