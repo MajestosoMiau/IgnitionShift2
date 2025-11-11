@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignition Shift - Home</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <div id="navbar-container"></div>
+
+        <!-- Achievements Content -->
+        <main class="achievements-container">
+            <div class="achievements-header">
+                <h2><i class="fas fa-trophy"></i> Your Achievements</h2>
+                <div class="achievements-stats">
+                    <div class="stat-box">
+                        <span class="stat-number" id="completed-count">0</span>
+                        <span class="stat-label">Completed</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number" id="total-count">0</span>
+                        <span class="stat-label">Total</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number" id="tokens-earned">0</span>
+                        <span class="stat-label">Tokens Earned</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Filters -->
+            <div class="achievement-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="training">Training</button>
+                <button class="filter-btn" data-filter="pvp">PVP</button>
+                <button class="filter-btn" data-filter="stats">Stats</button>
+                <button class="filter-btn" data-filter="collection">Collection</button>
+                <button class="filter-btn" data-filter="milestone">Milestones</button>
+            </div>
+
+            <div class="achievements-content">
+                <!-- Achievements Grid -->
+                <div class="achievements-grid" id="achievements-grid">
+                    <!-- Achievements will be loaded here -->
+                </div>
+
+                <!-- Achievement Details Panel -->
+                <div class="achievement-details" id="achievement-details">
+                    <div class="details-placeholder">
+                        <i class="fas fa-trophy"></i>
+                        <p>Select an achievement to view details</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script type="module" src="frontend.js"></script>
+</body>
+</html>
