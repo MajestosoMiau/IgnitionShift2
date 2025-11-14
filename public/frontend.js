@@ -7042,6 +7042,2897 @@ window.claimAchievementReward = async function(achievementId) {
     }
 };
 
+// ========== TEAM SYSTEM FUNCTIONS ==========
+
+// Global variables
+window.currentTeam = null;
+window.teamMembers = [];
+window.teamJoinRequests = [];
+window.currentTeamsTab = 'my-team';
+
+// Team level configuration
+const TEAM_LEVEL_CONFIG = {
+    1: { 
+        maxMembers: 2, 
+        upgradeCost: 5000,
+        bannerImage: 'team_level_1_banner.jpg',
+        colorTheme: '#00ffff'
+    },
+    2: { 
+        maxMembers: 3, 
+        upgradeCost: 15000,
+        bannerImage: 'team_level_2_banner.jpg', 
+        colorTheme: '#00ff88'
+    },
+    3: { 
+        maxMembers: 4, 
+        upgradeCost: 30000,
+        bannerImage: 'team_level_3_banner.jpg',
+        colorTheme: '#0077ff'
+    },
+    4: { 
+        maxMembers: 5, 
+        upgradeCost: 60000,
+        bannerImage: 'team_level_4_banner.jpg',
+        colorTheme: '#a29bfe'
+    },
+    5: { 
+        maxMembers: 6, 
+        upgradeCost: 120000,
+        bannerImage: 'team_level_5_banner.jpg',
+        colorTheme: '#feca57'
+    },
+    6: { 
+        maxMembers: 7, 
+        upgradeCost: 240000,
+        bannerImage: 'team_level_6_banner.jpg',
+        colorTheme: '#ff6b6b'
+    },
+    7: { 
+        maxMembers: 8, 
+        upgradeCost: 480000,
+        bannerImage: 'team_level_7_banner.jpg',
+        colorTheme: '#9b59b6'
+    },
+    8: { 
+        maxMembers: 9, 
+        upgradeCost: 960000,
+        bannerImage: 'team_level_8_banner.jpg',
+        colorTheme: '#1abc9c'
+    },
+    9: { 
+        maxMembers: 10, 
+        upgradeCost: 1920000,
+        bannerImage: 'team_level_9_banner.jpg',
+        colorTheme: '#e74c3c'
+    },
+    10: { 
+        maxMembers: 20, 
+        upgradeCost: 0,
+        bannerImage: 'team_level_10_banner.jpg',
+        colorTheme: '#f1c40f'
+    }
+};
+
+// Emblem options
+const TEAM_EMBLEMS = [
+    'dragon_emblem', 'phoenix_emblem', 'wolf_emblem', 'lion_emblem', 
+    'eagle_emblem', 'shark_emblem', 'tiger_emblem', 'bear_emblem',
+    'falcon_emblem', 'panther_emblem', 'viper_emblem', 'rhino_emblem'
+];
+
+// Team level image configuration
+const TEAM_LEVEL_IMAGES = {
+    1: 'level1.jpg',
+    2: 'level2.jpg', 
+    3: 'level3.jpg',
+    4: 'level4.jpg',
+    5: 'level5.jpg',
+    6: 'level6.jpg',
+    7: 'level7.jpg',
+    8: 'level8.jpg',
+    9: 'level9.jpg',
+    10: 'level10.jpg'
+};
+
+// ========== UTILITY FUNCTIONS ==========
+function getTeamLevelImage(teamLevel) {
+    const level = Math.min(Math.max(1, teamLevel), 10);
+    return TEAM_LEVEL_IMAGES[level] || 'level1.jpg';
+}
+
+function getTeamEmblemPath(teamData) {
+    if (!teamData) return 'images/emblems/default_emblem.png';
+    const level = teamData.level || 1;
+    const baseEmblem = teamData.emblem || 'default_emblem';
+    return `images/emblems/${baseEmblem}.png`;
+}
+
+function getTeamLevelBanner(teamLevel) {
+    const level = Math.min(Math.max(1, teamLevel), 10);
+    const config = TEAM_LEVEL_CONFIG[level];
+    return config ? config.bannerImage : 'level_1_banner.jpg';
+}
+
+function getTeamLevelColor(teamLevel) {
+    const level = Math.min(Math.max(1, teamLevel), 10);
+    const config = TEAM_LEVEL_CONFIG[level];
+    return config ? config.colorTheme : '#00ffff';
+}
+
+function getTeamEmblem(emblemName) {
+    const emblem = emblemName || 'default_emblem';
+    return `images/emblems/${emblem}.png`;
+}
+
+function getTeamBannerURL(teamLevel) {
+    const bannerImage = getTeamLevelBanner(teamLevel);
+    return `images/team_banners/${bannerImage}`;
+}
+
+function getMaxMembersForLevel(teamLevel) {
+    const level = Math.min(Math.max(1, teamLevel), 10);
+    const config = TEAM_LEVEL_CONFIG[level];
+    return config ? config.maxMembers : 5;
+}
+
+function getMemberRole(team, userId) {
+    if (!team || !userId) return 'member';
+    if (team.founderId === userId) return 'founder';
+    if (team.officers && team.officers.includes(userId)) return 'officer';
+    return 'member';
+}
+
+function getActivityIcon(activityType) {
+    const icons = {
+        'creation': '🏁',
+        'join': '👋',
+        'leave': '👋',
+        'donation': '💰',
+        'promotion': '⬆️',
+        'demotion': '⬇️',
+        'kick': '🚪'
+    };
+    return icons[activityType] || '📝';
+}
+
+function formatTeamTime(timestamp) {
+    if (!timestamp) return 'Recently';
+    try {
+        const time = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        return time.toLocaleDateString() + ' ' + time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+        return 'Recently';
+    }
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ========== TEAM INITIALIZATION ==========
+function initializeTeamSystem() {
+    console.log('🏁 Initializing team system...');
+    
+    // Inject basic CSS first
+    injectTeamCSS();
+    updateModalCSS();
+    
+    // Wait for auth to be ready
+    if (!auth) {
+        console.error('Firebase auth not available');
+        return;
+    }
+    
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            console.log('👤 User authenticated:', user.uid);
+            loadUserTeam();
+            setupTeamEventListeners();
+            setupTeamRealTimeListener();
+            
+            // Set initial tab
+            setTimeout(() => {
+                if (window.currentTeam) {
+                    console.log('User has team, switching to my-team');
+                    switchTeamsTab('my-team');
+                } else {
+                    console.log('User has no team, switching to browse');
+                    switchTeamsTab('browse');
+                }
+            }, 1000);
+        } else {
+            console.log('👤 No user logged in');
+            window.currentTeam = null;
+            showNoTeamView();
+            switchTeamsTab('browse');
+        }
+    });
+}
+
+// ========== TEAM CREATION ==========
+window.createTeam = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        alert('Please log in to create a team.');
+        return;
+    }
+
+    console.log('🔧 Starting team creation process...');
+
+    try {
+        // SAFELY get form values
+        const teamName = document.getElementById('team-name')?.value.trim() || '';
+        const teamTag = document.getElementById('team-tag')?.value.trim().toUpperCase() || '';
+        const teamDescription = document.getElementById('team-description')?.value.trim() || '';
+        const selectedEmblem = document.getElementById('team-emblem')?.value || 'dragon_emblem';
+        const joinType = document.getElementById('team-join-type')?.value || 'open';
+        const minLevel = parseInt(document.getElementById('team-min-level')?.value) || 1;
+
+        console.log('📋 Form values:', { teamName, teamTag, teamDescription, selectedEmblem, joinType, minLevel });
+
+        // Validation
+        if (!teamName || !teamTag) {
+            alert('Team name and tag are required!');
+            return;
+        }
+
+        if (teamName.length < 3 || teamName.length > 20) {
+            alert('Team name must be between 3-20 characters.');
+            return;
+        }
+
+        if (teamTag.length < 2 || teamTag.length > 4) {
+            alert('Team tag must be 2-4 characters.');
+            return;
+        }
+
+        // Check if user already has a team
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+            alert('User data not found!');
+            return;
+        }
+
+        const userData = userDoc.data();
+        console.log('👤 User data:', userData);
+
+        if (userData.teamId) {
+            alert('You are already in a team! Leave your current team first.');
+            return;
+        }
+
+        // Check if user has enough tokens
+        if ((userData.tokens || 0) < 49) {
+            alert('You need 49 Ignition Tokens to create a team!');
+            return;
+        }
+
+        // Check if team name/tag already exists
+        console.log('🔍 Checking for existing teams...');
+        const nameQuery = query(collection(db, "teams"), where("name", "==", teamName));
+        const tagQuery = query(collection(db, "teams"), where("tag", "==", teamTag));
+        
+        const [nameSnap, tagSnap] = await Promise.all([
+            getDocs(nameQuery),
+            getDocs(tagQuery)
+        ]);
+
+        if (!nameSnap.empty) {
+            alert('Team name already exists!');
+            return;
+        }
+
+        if (!tagSnap.empty) {
+            alert('Team tag already exists!');
+            return;
+        }
+
+        if (!confirm(`Create team "${teamName}" [${teamTag}] for 50 Ignition Tokens?`)) return;
+
+        console.log('🏗️ Creating team document...');
+
+        // Create team document
+        const teamData = {
+            name: teamName,
+            tag: teamTag,
+            description: teamDescription,
+            emblem: selectedEmblem,
+            level: 1,
+            experience: 0,
+            fame: userData.fame || 0,
+            vault: {
+                gold: 0,
+                tokens: 0,
+                resources: {}
+            },
+            founderId: user.uid,
+            officers: [],
+            members: [user.uid],
+            maxMembers: 2,
+            settings: {
+                joinType: joinType,
+                minLevel: minLevel,
+                public: true
+            },
+            activityLog: [
+                {
+                    type: 'creation',
+                    userId: user.uid,
+                    username: userData.username || user.email.split('@')[0],
+                    action: 'created the team',
+                    timestamp: new Date()
+                }
+            ],
+            createdAt: serverTimestamp(),
+            lastActivity: serverTimestamp(),
+            stats: {
+                totalDonations: 0,
+                memberCount: 1,
+                averageLevel: userData.level || 1,
+                totalRaces: 0,
+                totalWins: 0
+            }
+        };
+
+        console.log('📦 Team data prepared:', teamData);
+
+        const teamRef = await addDoc(collection(db, "teams"), teamData);
+        console.log('✅ Team document created with ID:', teamRef.id);
+
+        // Update user document
+        console.log('👤 Updating user document...');
+        await updateDoc(doc(db, "users", user.uid), {
+            teamId: teamRef.id,
+            teamRole: 'founder',
+            teamJoinDate: serverTimestamp(),
+            tokens: (userData.tokens || 0) - 49,
+            totalTeamDonations: 0
+        });
+
+        console.log('✅ User document updated');
+
+        alert(`🎉 Team "${teamName}" created successfully!`);
+        
+        // Clear form
+        document.getElementById('team-name').value = '';
+        document.getElementById('team-tag').value = '';
+        if (document.getElementById('team-description')) {
+            document.getElementById('team-description').value = '';
+        }
+        
+        // Switch to my team tab
+        switchTeamsTab('my-team');
+        loadUserTeam();
+        
+    } catch (error) {
+        console.error('❌ Error creating team:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        alert('Error creating team: ' + error.message);
+    }
+};
+
+// ========== TEAM SEARCH AND BROWSING ==========
+window.searchTeams = async function() {
+    const searchQuery = document.getElementById('team-search')?.value.trim().toLowerCase() || '';
+    const teamsContainer = document.getElementById('teams-list');
+    
+    if (!teamsContainer) {
+        console.error('teams-list container not found');
+        return;
+    }
+
+    teamsContainer.innerHTML = '<div class="loading">Searching teams...</div>';
+
+    try {
+        let teamsQuery;
+        if (searchQuery) {
+            console.log('Searching for teams with query:', searchQuery);
+            teamsQuery = query(
+                collection(db, "teams"),
+                where("settings.public", "==", true),
+                where("name", ">=", searchQuery),
+                where("name", "<=", searchQuery + '\uf8ff'),
+                limit(20)
+            );
+        } else {
+            console.log('Loading popular teams');
+            teamsQuery = query(
+                collection(db, "teams"),
+                where("settings.public", "==", true),
+                orderBy("fame", "desc"),
+                limit(20)
+            );
+        }
+
+        const snapshot = await getDocs(teamsQuery);
+        const teams = [];
+        
+        snapshot.forEach(doc => {
+            teams.push({ id: doc.id, ...doc.data() });
+        });
+
+        console.log('Found teams:', teams.length);
+        displayTeams(teams);
+    } catch (error) {
+        console.error('Error searching teams:', error);
+        teamsContainer.innerHTML = '<div class="error">Error searching teams: ' + error.message + '</div>';
+    }
+};
+
+function displayTeams(teams) {
+    const teamsContainer = document.getElementById('teams-list');
+    if (!teamsContainer) return;
+
+    if (teams.length === 0) {
+        teamsContainer.innerHTML = '<div class="no-teams">No teams found</div>';
+        return;
+    }
+
+    teamsContainer.innerHTML = teams.map(team => `
+        <div class="team-card" data-team-id="${team.id}">
+            <div class="team-header">
+                <div class="team-emblem">
+                    <img src="images/emblems/${team.emblem}.png" alt="${team.emblem}" 
+                         onerror="this.src='images/emblems/default_emblem.png'">
+                </div>
+                <div class="team-info">
+                    <h3>${escapeHtml(team.name)}</h3>
+                    <div class="team-tag">[${team.tag}]</div>
+                    <div class="team-level">Level ${team.level}</div>
+                </div>
+            </div>
+            
+            <div class="team-description">${escapeHtml(team.description)}</div>
+            
+            <div class="team-stats">
+                <div class="team-stat">
+                    <i class="fas fa-users"></i>
+                    <span>${team.members?.length || 0}/${team.maxMembers || 2}</span>
+                </div>
+                <div class="team-stat">
+                    <i class="fas fa-star"></i>
+                    <span>${Math.round(team.fame || 0)}</span>
+                </div>
+                <div class="team-stat">
+                    <i class="fas fa-signal"></i>
+                    <span>${Math.round(team.stats?.averageLevel || 1)}</span>
+                </div>
+            </div>
+            
+            <div class="team-join-info">
+                <span class="join-type ${team.settings?.joinType || 'open'}">
+                    ${(team.settings?.joinType || 'open').toUpperCase()}
+                </span>
+                <span class="min-level">Level ${team.settings?.minLevel || 1}+</span>
+            </div>
+            
+            <div class="team-actions">
+                ${getTeamActionButtons(team)}
+            </div>
+        </div>
+    `).join('');
+}
+
+function getTeamActionButtons(team) {
+    const user = auth.currentUser;
+    if (!user) return '<button disabled class="btn-disabled">Login to Join</button>';
+    
+    // Check if user is already in this team
+    if (window.currentTeam && window.currentTeam.id === team.id) {
+        return '<button disabled class="btn-disabled">Already in Team</button>';
+    }
+    
+    // Check if user is in any team
+    if (window.currentTeam) {
+        return '<button disabled class="btn-disabled">Already in a Team</button>';
+    }
+    
+    const userLevel = window.gameState?.player?.level || 1;
+    
+    if (userLevel < (team.settings?.minLevel || 1)) {
+        return `<button disabled class="btn-disabled">Level ${team.settings?.minLevel || 1} Required</button>`;
+    }
+    
+    switch (team.settings?.joinType || 'open') {
+        case 'open':
+            return `<button class="btn-primary" onclick="joinTeam('${team.id}')">Join Team</button>`;
+        case 'approval':
+            return `<button class="btn-secondary" onclick="requestToJoinTeam('${team.id}')">Request to Join</button>`;
+        case 'invite':
+            return `<button class="btn-disabled" disabled>Invite Only</button>`;
+        default:
+            return `<button class="btn-disabled" disabled>Closed</button>`;
+    }
+}
+
+// ========== TEAM JOINING SYSTEM ==========
+window.joinTeam = async function(teamId) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const teamDoc = await getDoc(doc(db, "teams", teamId));
+        
+        if (!userDoc.exists() || !teamDoc.exists()) {
+            alert('Error joining team.');
+            return;
+        }
+
+        const userData = userDoc.data();
+        const teamData = teamDoc.data();
+
+        // Validations
+        if (userData.teamId) {
+            alert('You are already in a team!');
+            return;
+        }
+
+        if (teamData.members.length >= teamData.maxMembers) {
+            alert('Team is full!');
+            return;
+        }
+
+        if ((userData.level || 1) < teamData.settings.minLevel) {
+            alert(`You need level ${teamData.settings.minLevel} to join this team.`);
+            return;
+        }
+
+        if (teamData.settings.joinType !== 'open') {
+            alert('This team requires approval or invitation.');
+            return;
+        }
+
+        if (!confirm(`Join ${teamData.name}?`)) return;
+
+        // Add user to team
+        await updateDoc(doc(db, "teams", teamId), {
+            members: arrayUnion(user.uid),
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'join',
+                userId: user.uid,
+                username: userData.username || user.email.split('@')[0],
+                action: 'joined the team',
+                timestamp: new Date()
+            })
+        });
+
+        // Update user document
+        await updateDoc(doc(db, "users", user.uid), {
+            teamId: teamId,
+            teamRole: 'member',
+            teamJoinDate: new Date()
+        });
+
+        // Update team stats
+        await updateTeamStats(teamId);
+
+        alert(`🎉 You joined ${teamData.name}!`);
+        loadUserTeam();
+        
+    } catch (error) {
+        console.error('Error joining team:', error);
+        alert('Error joining team: ' + error.message);
+    }
+};
+
+window.requestToJoinTeam = async function(teamId) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const teamDoc = await getDoc(doc(db, "teams", teamId));
+        
+        if (!userDoc.exists() || !teamDoc.exists()) {
+            alert('Error sending join request.');
+            return;
+        }
+
+        const userData = userDoc.data();
+        const teamData = teamDoc.data();
+
+        if (userData.teamId) {
+            alert('You are already in a team!');
+            return;
+        }
+
+        // Check if request already exists
+        const requestsQuery = query(
+            collection(db, "teamJoinRequests"),
+            where("teamId", "==", teamId),
+            where("userId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+        
+        const existingRequest = await getDocs(requestsQuery);
+        if (!existingRequest.empty) {
+            alert('You already have a pending request for this team.');
+            return;
+        }
+
+        // Create join request
+        await addDoc(collection(db, "teamJoinRequests"), {
+            teamId: teamId,
+            teamName: teamData.name,
+            userId: user.uid,
+            username: userData.username || user.email.split('@')[0],
+            userLevel: userData.level || 1,
+            userFame: userData.fame || 0,
+            message: document.getElementById('join-message')?.value || '',
+            status: 'pending',
+            createdAt: serverTimestamp()
+        });
+
+        alert('✅ Join request sent! The team leadership will review your application.');
+        
+    } catch (error) {
+        console.error('Error sending join request:', error);
+        alert('Error sending request: ' + error.message);
+    }
+};
+
+// ========== TEAM MANAGEMENT ==========
+async function loadUserTeam() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log('No user logged in');
+        window.currentTeam = null;
+        showNoTeamView();
+        return;
+    }
+
+    try {
+        console.log('🔄 Loading user team data...');
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        
+        if (!userDoc.exists()) {
+            console.log('❌ User document not found');
+            window.currentTeam = null;
+            showNoTeamView();
+            return;
+        }
+
+        const userData = userDoc.data();
+        console.log('👤 User team ID:', userData.teamId);
+        
+        if (!userData.teamId) {
+            console.log('❌ No team ID in user data');
+            window.currentTeam = null;
+            showNoTeamView();
+            return;
+        }
+
+        console.log('🔍 Loading team document:', userData.teamId);
+        const teamDoc = await getDoc(doc(db, "teams", userData.teamId));
+        
+        if (!teamDoc.exists()) {
+            console.log('❌ Team document not found');
+            window.currentTeam = null;
+            showNoTeamView();
+            return;
+        }
+
+        window.currentTeam = { 
+            id: teamDoc.id, 
+            ...teamDoc.data(),
+            vault: teamDoc.data().vault || { gold: 0, tokens: 0, resources: {} },
+            stats: teamDoc.data().stats || { totalDonations: 0, memberCount: 0, averageLevel: 1, totalRaces: 0, totalWins: 0 },
+            activityLog: teamDoc.data().activityLog || [],
+            members: teamDoc.data().members || [],
+            officers: teamDoc.data().officers || []
+        };
+        
+        console.log('✅ Team loaded successfully:', window.currentTeam.name);
+        
+        await loadTeamMembers();
+        displayTeamView();
+        
+    } catch (error) {
+        console.error('❌ Error loading user team:', error);
+        window.currentTeam = null;
+        showNoTeamView();
+    }
+}
+
+async function loadTeamMembers() {
+    if (!window.currentTeam) {
+        console.log('No current team to load members for');
+        window.teamMembers = [];
+        return;
+    }
+
+    try {
+        console.log('👥 Loading team members for:', window.currentTeam.name);
+        const memberPromises = window.currentTeam.members.map(memberId => 
+            getDoc(doc(db, "users", memberId))
+        );
+        
+        const memberSnapshots = await Promise.all(memberPromises);
+        window.teamMembers = [];
+        
+        memberSnapshots.forEach((doc, index) => {
+            if (doc.exists()) {
+                const userData = doc.data();
+                window.teamMembers.push({
+                    id: window.currentTeam.members[index],
+                    username: userData.username || userData.email?.split('@')[0] || 'Unknown',
+                    level: userData.level || 1,
+                    fame: userData.fame || 0,
+                    role: getMemberRole(window.currentTeam, window.currentTeam.members[index]),
+                    joinDate: userData.teamJoinDate,
+                    lastActive: userData.lastLogin
+                });
+            }
+        });
+
+        // Sort members by role importance
+        window.teamMembers.sort((a, b) => {
+            const roleOrder = { founder: 0, officer: 1, member: 2 };
+            return roleOrder[a.role] - roleOrder[b.role];
+        });
+
+        console.log(`✅ Loaded ${window.teamMembers.length} team members`);
+        
+    } catch (error) {
+        console.error('Error loading team members:', error);
+        window.teamMembers = [];
+    }
+}
+
+function setupTeamRealTimeListener() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    console.log('🔔 Setting up team real-time listener...');
+
+    // Listen for user document changes (team membership)
+    const userUnsubscribe = onSnapshot(doc(db, "users", user.uid), (doc) => {
+        const userData = doc.data();
+        console.log('👤 User data updated:', userData);
+        
+        if (!userData || !userData.teamId) {
+            console.log('❌ User left team or no team ID');
+            window.currentTeam = null;
+            showNoTeamView();
+        } else {
+            console.log('🔄 User team changed, reloading team data...');
+            loadUserTeam();
+        }
+    });
+
+    // Check if user is already in a team and set up team listener
+    getDoc(doc(db, "users", user.uid)).then((userDoc) => {
+        const userData = userDoc.data();
+        
+        if (userData && userData.teamId) {
+            console.log('👥 Setting up team document listener for:', userData.teamId);
+            
+            // Listen for team document changes
+            const teamUnsubscribe = onSnapshot(doc(db, "teams", userData.teamId), (doc) => {
+                if (doc.exists()) {
+                    console.log('🔄 Team data updated:', doc.data().name);
+                    window.currentTeam = { id: doc.id, ...doc.data() };
+                    loadTeamMembers();
+                    displayTeamView();
+                } else {
+                    console.log('❌ Team document no longer exists');
+                    window.currentTeam = null;
+                    showNoTeamView();
+                }
+            });
+
+            // Store unsubscribe function for cleanup
+            window.teamUnsubscribe = teamUnsubscribe;
+        }
+    }).catch((error) => {
+        console.error('Error setting up team listener:', error);
+    });
+
+    // Store unsubscribe function for cleanup
+    window.userUnsubscribe = userUnsubscribe;
+}
+
+// ========== TEAM DISPLAY FUNCTIONS ==========
+function getTeamHeaderActionButtons() {
+    const user = auth.currentUser;
+    if (!user || !window.currentTeam) return '';
+    
+    const userRole = getMemberRole(window.currentTeam, user.uid);
+    const buttons = [];
+    
+    if (userRole === 'founder' || userRole === 'officer') {
+        buttons.push(`
+            <button class="btn-secondary" onclick="showTeamSettings()">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+        `);
+        
+        if (window.currentTeam.settings.joinType !== 'open') {
+            buttons.push(`
+                <button class="btn-secondary" onclick="showJoinRequests()">
+                    <i class="fas fa-user-plus"></i> Requests
+                </button>
+            `);
+        }
+    }
+    
+    buttons.push(`
+        <button class="btn-danger" onclick="leaveTeam()">
+            <i class="fas fa-sign-out-alt"></i> Leave Team
+        </button>
+    `);
+    
+    return buttons.join('');
+}
+
+function getTeamMembersSection() {
+    if (!window.teamMembers || window.teamMembers.length === 0) return '<div class="no-members">No team members found.</div>';
+    
+    return `
+        <div class="team-members-section">
+            <h3>Team Members (${window.teamMembers.length}/${window.currentTeam.maxMembers})</h3>
+            <div class="members-grid">
+                ${window.teamMembers.map(member => `
+                    <div class="member-card ${member.role}">
+                        <div class="member-header">
+                            <div class="member-avatar">
+                                <img src="images/avatars/default_avatar.png" alt="${member.username}">
+                            </div>
+                            <div class="member-info">
+                                <div class="member-name">${escapeHtml(member.username)}</div>
+                                <div class="member-role-badge ${member.role}">${member.role.toUpperCase()}</div>
+                                <div class="member-level">Level ${member.level}</div>
+                            </div>
+                        </div>
+                        <div class="member-stats">
+                            <div class="member-stat">
+                                <i class="fas fa-star"></i>
+                                <span>${Math.round(member.fame)} Fame</span>
+                            </div>
+                            <div class="member-stat">
+                                <i class="fas fa-clock"></i>
+                                <span>${formatTeamTime(member.lastActive)}</span>
+                            </div>
+                        </div>
+                        <div class="member-actions">
+                            ${getMemberActionButtons(member)}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function getMemberActionButtons(member) {
+    const user = auth.currentUser;
+    if (!user || !window.currentTeam) return '';
+    
+    const userRole = getMemberRole(window.currentTeam, user.uid);
+    const buttons = [];
+    
+    // Don't show actions for yourself
+    if (user.uid !== member.id) {
+        buttons.push(`
+            <button class="btn-small" onclick="viewPlayerProfile('${member.id}', '${member.username}', ${member.level})">
+                <i class="fas fa-eye"></i>
+            </button>
+        `);
+        
+        // Only founders can manage members
+        if (userRole === 'founder') {
+            if (member.role === 'member') {
+                buttons.push(`
+                    <button class="btn-small btn-success" onclick="promoteToOfficer('${member.id}')">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                `);
+            } else if (member.role === 'officer') {
+                buttons.push(`
+                    <button class="btn-small btn-warning" onclick="demoteToMember('${member.id}')">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                `);
+            }
+            
+            // Can't kick yourself or other founders
+            if (member.id !== window.currentTeam.founderId) {
+                buttons.push(`
+                    <button class="btn-small btn-danger" onclick="kickMember('${member.id}', '${member.username}')">
+                        <i class="fas fa-user-times"></i>
+                    </button>
+                `);
+            }
+        }
+    }
+    
+    return buttons.join('');
+}
+
+// ========== FIXED DONATION SYSTEM ==========
+
+// Fixed processDonation function
+window.processDonation = async function() {
+    const user = auth.currentUser;
+    if (!user || !window.currentTeam) return;
+
+    const modal = document.getElementById('donate-modal');
+    if (!modal || !modal._userData) return;
+
+    const selectedCurrency = document.querySelector('.donate-option.active')?.dataset.currency || 'gold';
+    const amount = parseInt(document.getElementById('donate-amount')?.textContent.replace(/,/g, '') || 0);
+    
+    if (amount <= 0) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        // Double-check we have enough currency
+        if ((userData[selectedCurrency] || 0) < amount) {
+            alert(`Not enough ${selectedCurrency}! You have ${userData[selectedCurrency] || 0} but tried to donate ${amount}.`);
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to donate ${amount.toLocaleString()} ${selectedCurrency} to the team vault?`)) return;
+
+        // Update user currency
+        await updateDoc(doc(db, "users", user.uid), {
+            [selectedCurrency]: (userData[selectedCurrency] || 0) - amount
+        });
+
+        // Update team vault
+        const teamReceives = Math.floor(amount * 1.05);
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            [`vault.${selectedCurrency}`]: (window.currentTeam.vault[selectedCurrency] || 0) + teamReceives,
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'donation',
+                userId: user.uid,
+                username: userData.username || user.email.split('@')[0],
+                action: `donated ${amount} ${selectedCurrency}`,
+                amount: amount,
+                currency: selectedCurrency,
+                teamReceived: teamReceives,
+                totalDonated: ((userData.totalTeamDonations || 0) + amount),
+                timestamp: serverTimestamp()
+            }),
+            [`stats.totalDonations`]: (window.currentTeam.stats.totalDonations || 0) + amount
+        });
+
+        // Update user donation stats
+        await updateDoc(doc(db, "users", user.uid), {
+            totalTeamDonations: (userData.totalTeamDonations || 0) + amount
+        });
+
+        closeModal('donate-modal');
+        alert(`🎉 Successfully donated ${amount.toLocaleString()} ${selectedCurrency}! Team received ${teamReceives.toLocaleString()} with 5% bonus.`);
+        
+        // Reload team data to show updated vault
+        loadUserTeam();
+        
+        // Refresh player data if the function exists
+        if (typeof loadPlayerData === 'function') {
+            loadPlayerData(user.uid);
+        }
+        
+    } catch (error) {
+        console.error('Error processing donation:', error);
+        alert('Error processing donation: ' + error.message);
+    }
+};
+
+// Also update the CSS to ensure modal backdrop works properly
+// Add this to your injectTeamCSS function:
+function updateModalCSS() {
+    const modalStyle = `
+        /* Modal backdrop */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: rgba(40, 40, 70, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            border: 2px solid #4a4a8a;
+            color: white;
+            max-width: 500px;
+            margin: 50px auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        .close {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #ccc;
+            background: none;
+            border: none;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+    `;
+    
+    // Add to existing CSS
+    const style = document.createElement('style');
+    style.textContent = modalStyle;
+    document.head.appendChild(style);
+}
+
+function getActivityLogSection() {
+    if (!window.currentTeam) return '';
+    
+    const activities = window.currentTeam.activityLog || [];
+    const recentActivities = activities.slice(-10).reverse();
+    
+    return `
+        <div class="activity-log-section">
+            <h3>Recent Activity</h3>
+            <div class="activity-list">
+                ${recentActivities.length === 0 ? 
+                    '<div class="no-activity">No recent activity</div>' :
+                    recentActivities.map(activity => `
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                ${getActivityIcon(activity.type)}
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-text">
+                                    <strong>${escapeHtml(activity.username)}</strong> ${activity.action}
+                                    ${activity.amount ? ` (${activity.amount} ${activity.currency})` : ''}
+                                </div>
+                                <div class="activity-time">
+                                    ${formatTeamTime(activity.timestamp)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')
+                }
+            </div>
+        </div>
+    `;
+}
+
+// ========== TEAM MANAGEMENT ACTIONS ==========
+window.leaveTeam = async function() {
+    if (!window.currentTeam) return;
+    
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const userRole = getMemberRole(window.currentTeam, user.uid);
+    
+    if (userRole === 'founder') {
+        alert('As founder, you must transfer leadership or disband the team before leaving.');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to leave ${window.currentTeam.name}?`)) return;
+
+    try {
+        // Remove from team members
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            members: arrayRemove(user.uid),
+            officers: arrayRemove(user.uid),
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'leave',
+                userId: user.uid,
+                username: window.gameState?.player?.username || user.email.split('@')[0],
+                action: 'left the team',
+                timestamp: serverTimestamp()
+            })
+        });
+
+        // Update user document
+        await updateDoc(doc(db, "users", user.uid), {
+            teamId: null,
+            teamRole: null,
+            teamJoinDate: null
+        });
+
+        // Update team stats
+        await updateTeamStats(window.currentTeam.id);
+
+        alert(`You left ${window.currentTeam.name}.`);
+        window.currentTeam = null;
+        loadUserTeam();
+        
+    } catch (error) {
+        console.error('Error leaving team:', error);
+        alert('Error leaving team: ' + error.message);
+    }
+};
+
+window.promoteToOfficer = async function(memberId) {
+    if (!window.currentTeam) return;
+    
+    const member = window.teamMembers.find(m => m.id === memberId);
+    if (!member) return;
+
+    if (!confirm(`Promote ${member.username} to officer?`)) return;
+
+    try {
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            officers: arrayUnion(memberId),
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'promotion',
+                userId: memberId,
+                username: member.username,
+                action: 'was promoted to officer',
+                timestamp: serverTimestamp()
+            })
+        });
+
+        await loadUserTeam();
+        
+    } catch (error) {
+        console.error('Error promoting member:', error);
+        alert('Error promoting member: ' + error.message);
+    }
+};
+
+window.demoteToMember = async function(memberId) {
+    if (!window.currentTeam) return;
+    
+    const member = window.teamMembers.find(m => m.id === memberId);
+    if (!member) return;
+
+    if (!confirm(`Demote ${member.username} to member?`)) return;
+
+    try {
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            officers: arrayRemove(memberId),
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'demotion',
+                userId: memberId,
+                username: member.username,
+                action: 'was demoted to member',
+                timestamp: serverTimestamp()
+            })
+        });
+
+        await loadUserTeam();
+        
+    } catch (error) {
+        console.error('Error demoting member:', error);
+        alert('Error demoting member: ' + error.message);
+    }
+};
+
+window.kickMember = async function(memberId, username) {
+    if (!window.currentTeam) return;
+    
+    if (!confirm(`Kick ${username} from the team?`)) return;
+
+    try {
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            members: arrayRemove(memberId),
+            officers: arrayRemove(memberId),
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'kick',
+                userId: memberId,
+                username: username,
+                action: 'was kicked from the team',
+                timestamp: new Date()
+            })
+        });
+
+        // Update kicked user's document
+        await updateDoc(doc(db, "users", memberId), {
+            teamId: null,
+            teamRole: null,
+            teamJoinDate: null
+        });
+
+        // Update team stats
+        await updateTeamStats(window.currentTeam.id);
+
+        await loadUserTeam();
+        
+    } catch (error) {
+        console.error('Error kicking member:', error);
+        alert('Error kicking member: ' + error.message);
+    }
+};
+
+// ========== FIXED DONATION SYSTEM ==========
+
+// Fixed getTeamVaultSection function - this should be fine as is
+function getTeamVaultSection() {
+    if (!window.currentTeam) return '';
+    
+    return `
+        <div class="team-vault-section">
+            <h3>Team Vault</h3>
+            <div class="vault-display">
+                <div class="vault-item">
+                    <div class="vault-icon">💰</div>
+                    <div class="vault-info">
+                        <div class="vault-amount">${(window.currentTeam.vault?.gold || 0).toLocaleString()}</div>
+                        <div class="vault-label">Gold</div>
+                    </div>
+                </div>
+                <div class="vault-item">
+                    <div class="vault-icon">💎</div>
+                    <div class="vault-info">
+                        <div class="vault-amount">${(window.currentTeam.vault?.tokens || 0).toLocaleString()}</div>
+                        <div class="vault-label">Tokens</div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn-primary" onclick="showDonateModal()">
+                <i class="fas fa-donate"></i> Donate to Vault
+            </button>
+        </div>
+    `;
+}
+
+// Fixed showDonateModal function - uses your existing modal pattern
+window.showDonateModal = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        alert('Please log in to donate.');
+        return;
+    }
+
+    try {
+        // Get fresh user data from Firebase
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        const modal = document.getElementById('donate-modal');
+        if (!modal) {
+            console.error('Donate modal not found');
+            return;
+        }
+
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('donate-modal')">&times;</span>
+                <h2>Donate to Team Vault</h2>
+                
+                <div class="donate-options">
+                    <div class="donate-option active" data-currency="gold">
+                        <div class="currency-icon">💰</div>
+                        <div class="currency-info">
+                            <div class="currency-name">Gold</div>
+                            <div class="currency-amount">Available: ${(userData.gold || 0).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="donate-option" data-currency="tokens">
+                        <div class="currency-icon">💎</div>
+                        <div class="currency-info">
+                            <div class="currency-name">Ignition Tokens</div>
+                            <div class="currency-amount">Available: ${(userData.tokens || 0).toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="amount-selection">
+                    <h4>Select Amount</h4>
+                    <div class="amount-buttons">
+                        <button class="amount-btn" data-amount="100">100</button>
+                        <button class="amount-btn" data-amount="500">500</button>
+                        <button class="amount-btn" data-amount="1000">1,000</button>
+                        <button class="amount-btn" data-amount="5000">5,000</button>
+                    </div>
+                    
+                    <div class="custom-amount">
+                        <input type="number" id="custom-amount" placeholder="Custom amount" min="1">
+                    </div>
+                </div>
+
+                <div class="donate-preview">
+                    <div class="preview-item">
+                        <span>You donate:</span>
+                        <span id="donate-amount">0</span>
+                        <span id="donate-currency">gold</span>
+                    </div>
+                    <div class="preview-item">
+                        <span>Team receives:</span>
+                        <span id="team-receives">0</span>
+                        <span id="receive-currency">gold</span>
+                    </div>
+                    <div class="preview-bonus">
+                        <small>+5% bonus for team donations!</small>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="confirm-donate" onclick="processDonation()" disabled>
+                    Confirm Donation
+                </button>
+            </div>
+        `;
+
+        // Store user data for the donation process
+        window.currentDonationData = {
+            userData: userData,
+            selectedCurrency: 'gold',
+            amount: 0
+        };
+        
+        setupDonateModalEvents();
+        
+        // Use your existing modal show function
+        modal.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error showing donate modal:', error);
+        alert('Error loading donation interface: ' + error.message);
+    }
+};
+
+// Fixed setupDonateModalEvents function
+function setupDonateModalEvents() {
+    // Currency selection
+    document.querySelectorAll('.donate-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.donate-option').forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update stored currency
+            if (window.currentDonationData) {
+                window.currentDonationData.selectedCurrency = this.dataset.currency;
+            }
+            
+            updateDonatePreview();
+        });
+    });
+
+    // Amount buttons
+    document.querySelectorAll('.amount-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('custom-amount').value = '';
+            updateDonatePreview(parseInt(this.dataset.amount));
+        });
+    });
+
+    // Custom amount input
+    const customAmount = document.getElementById('custom-amount');
+    if (customAmount) {
+        customAmount.addEventListener('input', function() {
+            updateDonatePreview(parseInt(this.value) || 0);
+        });
+    }
+}
+
+// Fixed updateDonatePreview function
+function updateDonatePreview(amount = 0) {
+    if (!window.currentDonationData || !window.currentDonationData.userData) return;
+    
+    const selectedCurrency = window.currentDonationData.selectedCurrency || 'gold';
+    const available = window.currentDonationData.userData[selectedCurrency] || 0;
+    
+    const finalAmount = amount > available ? available : amount;
+    const teamReceives = Math.floor(finalAmount * 1.05); // 5% bonus
+    
+    // Update stored amount
+    window.currentDonationData.amount = finalAmount;
+    
+    const donateAmount = document.getElementById('donate-amount');
+    const donateCurrency = document.getElementById('donate-currency');
+    const teamReceivesElem = document.getElementById('team-receives');
+    const receiveCurrency = document.getElementById('receive-currency');
+    
+    if (donateAmount) donateAmount.textContent = finalAmount.toLocaleString();
+    if (donateCurrency) donateCurrency.textContent = selectedCurrency;
+    if (teamReceivesElem) teamReceivesElem.textContent = teamReceives.toLocaleString();
+    if (receiveCurrency) receiveCurrency.textContent = selectedCurrency;
+    
+    const confirmBtn = document.getElementById('confirm-donate');
+    if (confirmBtn) {
+        confirmBtn.disabled = finalAmount <= 0 || finalAmount > available;
+        confirmBtn.textContent = finalAmount > 0 ? 
+            `Donate ${finalAmount.toLocaleString()} ${selectedCurrency}` : 
+            'Confirm Donation';
+    }
+}
+
+// Fixed processDonation function
+window.processDonation = async function() {
+    const user = auth.currentUser;
+    if (!user || !window.currentTeam) return;
+
+    if (!window.currentDonationData || window.currentDonationData.amount <= 0) {
+        alert('Please select an amount to donate.');
+        return;
+    }
+
+    const selectedCurrency = window.currentDonationData.selectedCurrency || 'gold';
+    const amount = window.currentDonationData.amount;
+    
+    try {
+        // Get fresh user data to ensure we have latest balance
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        // Double-check we have enough currency
+        if ((userData[selectedCurrency] || 0) < amount) {
+            alert(`Not enough ${selectedCurrency}! You have ${(userData[selectedCurrency] || 0).toLocaleString()} but tried to donate ${amount.toLocaleString()}.`);
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to donate ${amount.toLocaleString()} ${selectedCurrency} to the team vault?`)) return;
+
+        console.log(`Processing donation: ${amount} ${selectedCurrency}`);
+
+        // Update user currency
+        await updateDoc(doc(db, "users", user.uid), {
+            [selectedCurrency]: (userData[selectedCurrency] || 0) - amount
+        });
+
+        // Update team vault
+        const teamReceives = Math.floor(amount * 1.05);
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            [`vault.${selectedCurrency}`]: (window.currentTeam.vault[selectedCurrency] || 0) + teamReceives,
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'donation',
+                userId: user.uid,
+                username: userData.username || user.email.split('@')[0],
+                action: `donated ${amount} ${selectedCurrency}`,
+                amount: amount,
+                currency: selectedCurrency,
+                teamReceived: teamReceives,
+                totalDonated: ((userData.totalTeamDonations || 0) + amount),
+                timestamp: new Date()
+            }),
+            [`stats.totalDonations`]: (window.currentTeam.stats.totalDonations || 0) + amount
+        });
+
+        // Update user donation stats
+        await updateDoc(doc(db, "users", user.uid), {
+            totalTeamDonations: (userData.totalTeamDonations || 0) + amount
+        });
+
+        // Close modal using your existing function
+        closeModal('donate-modal');
+        
+        // Clean up donation data
+        window.currentDonationData = null;
+        
+        alert(`🎉 Successfully donated ${amount.toLocaleString()} ${selectedCurrency}! Team received ${teamReceives.toLocaleString()} with 5% bonus.`);
+        
+        // Reload team data to show updated vault
+        loadUserTeam();
+        
+        // Refresh player data if the function exists
+        if (typeof loadPlayerData === 'function') {
+            loadPlayerData(user.uid);
+        } else {
+            // Force refresh by reloading user team data
+            loadUserTeam();
+        }
+        
+    } catch (error) {
+        console.error('Error processing donation:', error);
+        alert('Error processing donation: ' + error.message);
+    }
+};
+
+// Make sure closeModal function exists and works
+// Add this if you don't have it already
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'none';
+        // Clean up donation data when modal closes
+        if (modalId === 'donate-modal') {
+            window.currentDonationData = null;
+        }
+    }
+}
+
+// Also add click outside to close for all modals (if not already in your system)
+document.addEventListener('DOMContentLoaded', function() {
+    // Click outside modal to close
+    window.addEventListener('click', function(event) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+                // Clean up donation data if it's the donate modal
+                if (modal.id === 'donate-modal') {
+                    window.currentDonationData = null;
+                }
+            }
+        });
+    });
+    
+    // Escape key to close modals
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (modal.style.display === 'block') {
+                    modal.style.display = 'none';
+                    // Clean up donation data if it's the donate modal
+                    if (modal.id === 'donate-modal') {
+                        window.currentDonationData = null;
+                    }
+                }
+            });
+        }
+    });
+});
+
+// ========== TEAM LEVEL UPGRADE ==========
+// Fixed upgradeTeamLevel function
+window.upgradeTeamLevel = async function() {
+    if (!window.currentTeam) return;
+    
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Check if user is founder or officer
+    const userRole = getMemberRole(window.currentTeam, user.uid);
+    if (userRole !== 'founder' && userRole !== 'officer') {
+        alert('Only team founders and officers can upgrade the team level!');
+        return;
+    }
+
+    const currentLevel = window.currentTeam.level || 1;
+    const nextLevel = currentLevel + 1;
+    
+    // Check if already at max level
+    if (!TEAM_LEVEL_CONFIG[nextLevel]) {
+        alert('Your team is already at the maximum level!');
+        return;
+    }
+
+    const upgradeCost = TEAM_LEVEL_CONFIG[currentLevel].upgradeCost;
+    const currentVaultGold = window.currentTeam.vault?.gold || 0;
+
+    // Check if team has enough gold in vault
+    if (currentVaultGold < upgradeCost) {
+        alert(`Not enough gold in team vault! Need ${upgradeCost.toLocaleString()} gold, but only have ${currentVaultGold.toLocaleString()} gold.`);
+        return;
+    }
+
+    if (!confirm(`Upgrade team to Level ${nextLevel} for ${upgradeCost.toLocaleString()} gold from the team vault?`)) return;
+
+    try {
+        // Update team level and deduct gold from vault
+        await updateDoc(doc(db, "teams", window.currentTeam.id), {
+            level: nextLevel,
+            maxMembers: TEAM_LEVEL_CONFIG[nextLevel].maxMembers,
+            'vault.gold': currentVaultGold - upgradeCost,
+            lastActivity: serverTimestamp(),
+            activityLog: arrayUnion({
+                type: 'level_up',
+                userId: user.uid,
+                username: window.gameState?.player?.username || user.email.split('@')[0],
+                action: `upgraded the team to Level ${nextLevel}`,
+                cost: upgradeCost,
+                timestamp: new Date()
+            })
+        });
+
+        alert(`🎉 Team upgraded to Level ${nextLevel}!`);
+        loadUserTeam(); // Reload team data to show changes
+        
+    } catch (error) {
+        console.error('Error upgrading team level:', error);
+        alert('Error upgrading team level: ' + error.message);
+    }
+};
+
+// Fixed getLevelUpgradeSection function - better canUpgrade logic
+function getLevelUpgradeSection(team, currentLevel, canUpgrade, themeColor) {
+    const nextLevel = currentLevel + 1;
+    const nextLevelConfig = TEAM_LEVEL_CONFIG[nextLevel];
+    
+    if (!nextLevelConfig) {
+        return `
+            <div class="level-upgrade-section max-level">
+                <h3>🏆 Maximum Level Reached!</h3>
+                <p>Your team has reached the highest level possible. Great work!</p>
+            </div>
+        `;
+    }
+
+    const upgradeCost = TEAM_LEVEL_CONFIG[currentLevel].upgradeCost;
+    const currentVaultGold = team.vault?.gold || 0;
+    const progressPercent = Math.min(100, (currentVaultGold / upgradeCost) * 100);
+
+    // Get user role safely
+    const user = auth.currentUser;
+    const userRole = user ? getMemberRole(team, user.uid) : 'member';
+    const isLeader = userRole === 'founder' || userRole === 'officer';
+
+    // FIXED: Better canUpgrade calculation
+    const canActuallyUpgrade = currentVaultGold >= upgradeCost && isLeader;
+
+    return `
+        <div class="level-upgrade-section ${canActuallyUpgrade ? 'can-upgrade' : ''}">
+            <div class="upgrade-header">
+                <h3>Level Up to ${nextLevel}</h3>
+                ${canActuallyUpgrade ? '<span class="upgrade-ready">Ready to Upgrade!</span>' : ''}
+            </div>
+            
+            <div class="upgrade-info">
+                <div class="upgrade-benefits">
+                    <h4>Benefits:</h4>
+                    <ul>
+                        <li>Max Members: ${team.maxMembers} → <strong>${nextLevelConfig.maxMembers}</strong></li>
+                        <li>New Banner: <strong>Level ${nextLevel} Banner</strong></li>
+                        <li>Prestige: <strong>Enhanced team appearance</strong></li>
+                    </ul>
+                </div>
+                
+                <div class="upgrade-cost">
+                    <h4>Upgrade Cost:</h4>
+                    <div class="cost-display ${currentVaultGold >= upgradeCost ? 'can-afford' : 'cannot-afford'}">
+                        <span class="cost-amount">${upgradeCost.toLocaleString()} Gold</span>
+                        <span class="vault-amount">Vault: ${currentVaultGold.toLocaleString()} Gold</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="upgrade-progress">
+                <div class="progress-info">
+                    <span>Progress to Level ${nextLevel}</span>
+                    <span>${Math.floor(progressPercent)}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progressPercent}%; background: ${themeColor};"></div>
+                </div>
+                <div class="progress-text">
+                    ${currentVaultGold.toLocaleString()} / ${upgradeCost.toLocaleString()} Gold
+                </div>
+            </div>
+
+            ${isLeader ? `
+                <div class="upgrade-actions">
+                    <button class="btn-primary upgrade-btn" onclick="upgradeTeamLevel()" ${!canActuallyUpgrade ? 'disabled' : ''}>
+                        <i class="fas fa-arrow-up"></i> 
+                        Upgrade to Level ${nextLevel}
+                    </button>
+                    ${!canActuallyUpgrade ? `
+                        <div class="upgrade-help">
+                            <i class="fas fa-info-circle"></i>
+                            ${currentVaultGold < upgradeCost ? 
+                                `Need ${(upgradeCost - currentVaultGold).toLocaleString()} more gold in vault` : 
+                                'Only team founders and officers can upgrade'}
+                        </div>
+                    ` : ''}
+                </div>
+            ` : `
+                <div class="upgrade-help">
+                    <i class="fas fa-info-circle"></i>
+                    Only team founders and officers can upgrade the team level
+                </div>
+            `}
+        </div>
+    `;
+}
+
+// Also update the displayTeamView function to pass the correct parameters
+function displayTeamView() {
+    const teamContainer = document.getElementById('team-container');
+    
+    if (!teamContainer || !window.currentTeam) {
+        showNoTeamView();
+        return;
+    }
+
+    try {
+        const teamLevel = window.currentTeam.level || 1;
+        const bannerImage = getTeamBannerURL(teamLevel);
+        const themeColor = getTeamLevelColor(teamLevel);
+        const nextLevelConfig = TEAM_LEVEL_CONFIG[teamLevel + 1];
+        
+        // FIXED: Better canUpgrade calculation
+        const upgradeCost = TEAM_LEVEL_CONFIG[teamLevel].upgradeCost;
+        const currentVaultGold = window.currentTeam.vault?.gold || 0;
+        const user = auth.currentUser;
+        const userRole = user ? getMemberRole(window.currentTeam, user.uid) : 'member';
+        const isLeader = userRole === 'founder' || userRole === 'officer';
+        const canUpgrade = currentVaultGold >= upgradeCost && isLeader && nextLevelConfig;
+
+        const teamHTML = `
+            <div class="team-dashboard">
+                <!-- Team Header -->
+                <div class="team-header-card" style="background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9)), url('${bannerImage}'); background-size: cover; background-position: center;">
+                    <div class="team-emblem-large">
+                        <img src="${getTeamEmblem(window.currentTeam.emblem)}" alt="${window.currentTeam.emblem}"
+                             onerror="this.src='images/emblems/default_emblem.png'">
+                    </div>
+                    <div class="team-info-main">
+                        <h1 style="color: ${themeColor};">${escapeHtml(window.currentTeam.name)}</h1>
+                        <div class="team-tag-large">[${window.currentTeam.tag}]</div>
+                        <div class="team-level-badge" style="background: ${themeColor};">
+                            Level ${teamLevel}
+                        </div>
+                        <p class="team-description-main">${escapeHtml(window.currentTeam.description || 'No description')}</p>
+                    </div>
+                    <div class="team-actions-header">
+                        ${getTeamHeaderActionButtons()}
+                    </div>
+                </div>
+
+                <!-- Team Stats Grid -->
+                <div class="team-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${window.teamMembers.length}/${window.currentTeam.maxMembers || 5}</div>
+                        <div class="stat-label">Members</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${Math.round(window.currentTeam.fame || 0)}</div>
+                        <div class="stat-label">Fame</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${(window.currentTeam.vault?.gold || 0).toLocaleString()}</div>
+                        <div class="stat-label">Vault Gold</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${window.currentTeam.stats?.totalWins || 0}</div>
+                        <div class="stat-label">Team Wins</div>
+                    </div>
+                </div>
+
+                <!-- Level Upgrade Section -->
+                ${getLevelUpgradeSection(window.currentTeam, teamLevel, canUpgrade, themeColor)}
+
+                <!-- Team Members -->
+                ${getTeamMembersSection()}
+
+                <!-- Team Vault -->
+                ${getTeamVaultSection()}
+
+                <!-- Activity Log -->
+                ${getActivityLogSection()}
+            </div>
+        `;
+
+        teamContainer.innerHTML = teamHTML;
+        
+    } catch (error) {
+        console.error('❌ Error displaying team view:', error);
+        teamContainer.innerHTML = '<div class="error">Error displaying team information</div>';
+    }
+}
+
+// ========== UTILITY AND VIEW FUNCTIONS ==========
+function showNoTeamView() {
+    const teamContainer = document.getElementById('team-container');
+    if (!teamContainer) {
+        console.error('Team container not found for no-team view');
+        return;
+    }
+
+    console.log('Showing no-team view');
+    
+    teamContainer.innerHTML = `
+        <div class="no-team-view">
+            <div class="no-team-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <h2>Join a Team</h2>
+            <p>Team up with other racers to earn bonuses, share resources, and climb the leaderboards together!</p>
+            
+            <div class="no-team-actions">
+                <button class="btn-primary" onclick="showCreateTeamModal()">
+                    <i class="fas fa-plus"></i> Create Team
+                </button>
+                <button class="btn-secondary" onclick="switchTeamsTab('browse')">
+                    <i class="fas fa-search"></i> Browse Teams
+                </button>
+            </div>
+
+            <div class="team-benefits">
+                <h3>Team Benefits</h3>
+                <div class="benefits-grid">
+                    <div class="benefit-item">
+                        <i class="fas fa-hand-holding-usd"></i>
+                        <strong>Shared Vault</strong>
+                        <span>Pool resources for team upgrades</span>
+                    </div>
+                    <div class="benefit-item">
+                        <i class="fas fa-trophy"></i>
+                        <strong>Fame Bonuses</strong>
+                        <span>Earn extra fame in team events</span>
+                    </div>
+                    <div class="benefit-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <strong>Team Perks</strong>
+                        <span>Unlock exclusive team rewards</span>
+                    </div>
+                    <div class="benefit-item">
+                        <i class="fas fa-users"></i>
+                        <strong>Community</strong>
+                        <span>Race and train together</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.switchTeamsTab = function(tabName) {
+    console.log('Switching to tab:', tabName);
+    window.currentTeamsTab = tabName;
+    
+    // Update tab buttons
+    const tabButtons = document.querySelectorAll('.teams-tab-btn');
+    tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tabName) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Show appropriate content
+    const tabContents = document.querySelectorAll('.teams-tab-content');
+    tabContents.forEach(content => {
+        content.style.display = 'none';
+        if (content.id === `${tabName}-tab`) {
+            content.style.display = 'block';
+            console.log(`Showing tab: ${content.id}`);
+        }
+    });
+    
+    // Load content based on tab
+    if (tabName === 'search' || tabName === 'browse') {
+        searchTeams();
+    } else if (tabName === 'my-team') {
+        if (window.currentTeam) {
+            console.log('Loading my team view');
+            displayTeamView();
+        } else {
+            console.log('No team, showing no-team view');
+            showNoTeamView();
+        }
+    }
+    
+    console.log('Current tab after switch:', window.currentTeamsTab);
+};
+
+async function updateTeamStats(teamId) {
+    try {
+        const teamDoc = await getDoc(doc(db, "teams", teamId));
+        if (!teamDoc.exists()) return;
+
+        const teamData = teamDoc.data();
+        const memberPromises = teamData.members.map(memberId => 
+            getDoc(doc(db, "users", memberId))
+        );
+        
+        const memberSnapshots = await Promise.all(memberPromises);
+        
+        let totalFame = 0;
+        let totalLevel = 0;
+        let activeMembers = 0;
+        
+        memberSnapshots.forEach(doc => {
+            if (doc.exists()) {
+                const userData = doc.data();
+                totalFame += userData.fame || 0;
+                totalLevel += userData.level || 1;
+                activeMembers++;
+            }
+        });
+        
+        const averageLevel = activeMembers > 0 ? totalLevel / activeMembers : 0;
+        const averageFame = activeMembers > 0 ? totalFame / activeMembers : 0;
+        
+        await updateDoc(doc(db, "teams", teamId), {
+            fame: Math.round(averageFame),
+            stats: {
+                ...teamData.stats,
+                memberCount: activeMembers,
+                averageLevel: Math.round(averageLevel * 10) / 10
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error updating team stats:', error);
+    }
+}
+
+function setupTeamEventListeners() {
+    // Tab switching
+    document.querySelectorAll('.teams-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            switchTeamsTab(this.dataset.tab);
+        });
+    });
+    
+    // Team search
+    const searchInput = document.getElementById('team-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(searchTeams, 500));
+    }
+}
+
+// ========== IMAGE ERROR HANDLING ==========
+window.handleTeamImageError = function(imgElement, imageType, identifier) {
+    console.log(`🖼️ Team image failed: ${imgElement.src}`);
+    
+    let fallbacks = [];
+    
+    if (imageType === 'emblem') {
+        fallbacks = [
+            'images/emblems/default_emblem.png',
+            'images/emblems/dragon_emblem.png'
+        ];
+    } else if (imageType === 'banner') {
+        fallbacks = [
+            'images/team_banners/team_level_1_banner.jpg',
+            'images/team_banners/default_banner.jpg'
+        ];
+    }
+    
+    // Try next fallback
+    if (fallbacks.length > 0) {
+        const currentIndex = fallbacks.indexOf(imgElement.src);
+        const nextIndex = currentIndex + 1;
+        
+        if (nextIndex < fallbacks.length) {
+            imgElement.src = fallbacks[nextIndex];
+        } else {
+            console.log('❌ All image fallbacks failed');
+            imgElement.style.display = 'none';
+        }
+    }
+};
+
+// ========== CLEANUP FUNCTIONS ==========
+function cleanupTeamListeners() {
+    if (window.userUnsubscribe) {
+        window.userUnsubscribe();
+        console.log('🔕 User listener cleaned up');
+    }
+    if (window.teamUnsubscribe) {
+        window.teamUnsubscribe();
+        console.log('🔕 Team listener cleaned up');
+    }
+}
+
+window.cleanupTeamListeners = cleanupTeamListeners;
+
+// ========== DEBUG FUNCTIONS ==========
+window.debugTeamPermissions = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log('No user logged in');
+        return;
+    }
+
+    console.log('=== TEAM PERMISSIONS DEBUG ===');
+    console.log('User ID:', user.uid);
+    
+    try {
+        // Test team creation permission
+        console.log('🔧 Testing team creation...');
+        const testTeamRef = doc(collection(db, "teams"));
+        await setDoc(testTeamRef, {
+            name: "test_team",
+            tag: "TEST",
+            founderId: user.uid,
+            members: [user.uid],
+            officers: [],
+            settings: { public: true, joinType: "open", minLevel: 1 },
+            createdAt: serverTimestamp()
+        });
+        console.log('✅ Team creation: GRANTED');
+        
+        // Clean up test team
+        await deleteDoc(testTeamRef);
+        console.log('✅ Team deletion: GRANTED');
+        
+    } catch (error) {
+        console.error('❌ Team permissions error:', error);
+        console.log('Error code:', error.code);
+        console.log('Error message:', error.message);
+    }
+};
+
+window.debugTeamLoading = async function() {
+    const user = auth.currentUser;
+    console.log('=== TEAM LOADING DEBUG ===');
+    console.log('User:', user ? user.uid : 'No user');
+    
+    if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        console.log('User data:', userData);
+        console.log('Team ID:', userData?.teamId);
+        
+        if (userData?.teamId) {
+            const teamDoc = await getDoc(doc(db, "teams", userData.teamId));
+            console.log('Team exists:', teamDoc.exists());
+            console.log('Team data:', teamDoc.data());
+        }
+    }
+    
+    console.log('Current team:', window.currentTeam);
+    console.log('Team members:', window.teamMembers);
+};
+
+function debugTeamState() {
+    console.log('=== TEAM STATE DEBUG ===');
+    console.log('Global currentTeam:', window.currentTeam);
+    console.log('Global teamMembers:', window.teamMembers);
+    console.log('Global currentTeamsTab:', window.currentTeamsTab);
+    console.log('User authenticated:', !!auth.currentUser);
+    
+    if (auth.currentUser) {
+        console.log('User ID:', auth.currentUser.uid);
+    }
+    
+    // Check DOM elements
+    const teamContainer = document.getElementById('team-container');
+    console.log('Team Container exists:', !!teamContainer);
+    
+    // Check which tab is active
+    const activeTab = document.querySelector('.teams-tab-btn.active');
+    console.log('Active tab button:', activeTab?.dataset.tab);
+    
+    // Check if my-team tab content is visible
+    const myTeamTab = document.getElementById('my-team-tab');
+    console.log('My Team tab visible:', myTeamTab?.style.display !== 'none');
+}
+
+// ========== MISSING MODAL FUNCTIONS ==========
+window.showCreateTeamModal = function() {
+    console.log('Show create team modal');
+    switchTeamsTab('create');
+};
+
+window.showTeamSettings = function() {
+    console.log('Show team settings');
+    alert('Team settings functionality to be implemented');
+};
+
+window.showJoinRequests = function() {
+    console.log('Show join requests');
+    alert('Join requests functionality to be implemented');
+};
+
+window.viewPlayerProfile = function(playerId, username, level) {
+    console.log('View profile:', playerId, username, level);
+    alert(`Viewing profile of ${username} (Level ${level}) - functionality to be implemented`);
+};
+
+// ========== CSS INJECTION ==========
+function injectTeamCSS() {
+    if (document.getElementById('team-system-css')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'team-system-css';
+    style.textContent = `
+        .team-dashboard {
+            color: white;
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .team-header-card {
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9));
+            border: 2px solid #3a3a5a;
+        }
+        
+        .team-emblem-large img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 4px solid gold;
+            background: #2a2a4a;
+        }
+        
+        .team-info-main h1 {
+            margin: 0 0 10px 0;
+            font-size: 32px;
+            color: #00ffff;
+        }
+        
+        .team-tag-large {
+            font-size: 20px;
+            opacity: 0.8;
+            margin: 5px 0;
+            color: #ccc;
+        }
+        
+        .team-level-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .team-description-main {
+            margin: 15px 0 0 0;
+            color: #ccc;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        
+        .team-actions-header {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .team-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .stat-card {
+            background: rgba(40, 40, 70, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #4a4a8a;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00ffff;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        
+        .level-upgrade-section {
+            background: rgba(30, 30, 60, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 30px 0;
+            border-left: 5px solid #00ffff;
+        }
+        
+        .level-upgrade-section.can-upgrade {
+            border-left-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .upgrade-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .upgrade-header h3 {
+            margin: 0;
+            color: #00ffff;
+        }
+        
+        .upgrade-ready {
+            background: #00ff88;
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .upgrade-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        
+        .upgrade-benefits h4, .upgrade-cost h4 {
+            color: #00ffff;
+            margin-bottom: 10px;
+        }
+        
+        .upgrade-benefits ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .upgrade-benefits li {
+            padding: 5px 0;
+            color: #ccc;
+        }
+        
+        .upgrade-benefits strong {
+            color: #00ff88;
+        }
+        
+        .cost-display {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .cost-display.can-afford {
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+        }
+        
+        .cost-display.cannot-afford {
+            background: rgba(255, 100, 100, 0.2);
+            border: 2px solid #ff6b6b;
+        }
+        
+        .cost-amount {
+            display: block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #feca57;
+        }
+        
+        .vault-amount {
+            display: block;
+            font-size: 16px;
+            color: #ccc;
+            margin-top: 5px;
+        }
+        
+        .upgrade-progress {
+            margin: 25px 0;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #ccc;
+        }
+        
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        .upgrade-actions {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .upgrade-help {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            margin-top: 15px;
+        }
+        
+        .btn-primary, .btn-secondary, .btn-danger, .btn-disabled {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary { 
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border: 1px solid #007bff;
+        }
+        .btn-primary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #0056b3, #004085);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary { 
+            background: linear-gradient(135deg, #6c757d, #545b62);
+            border: 1px solid #6c757d;
+        }
+        .btn-secondary:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #545b62, #4e555b);
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger { 
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            border: 1px solid #dc3545;
+        }
+        .btn-danger:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #c82333, #bd2130);
+            transform: translateY(-2px);
+        }
+        
+        .btn-disabled { 
+            background: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .members-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .member-card {
+            background: rgba(50, 50, 80, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 5px solid #666;
+            transition: transform 0.3s ease;
+        }
+        
+        .member-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .member-card.founder { border-left-color: gold; }
+        .member-card.officer { border-left-color: silver; }
+        .member-card.member { border-left-color: #00ffff; }
+        
+        .member-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .member-avatar img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid #3a3a5a;
+        }
+        
+        .member-name {
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+        }
+        
+        .member-role-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .member-role-badge.founder { background: gold; color: black; }
+        .member-role-badge.officer { background: silver; color: black; }
+        .member-role-badge.member { background: #00ffff; color: black; }
+        
+        .member-level {
+            color: #ccc;
+            font-size: 14px;
+            margin-top: 2px;
+        }
+        
+        .member-stats {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px 0;
+            border-top: 1px solid #3a3a5a;
+            border-bottom: 1px solid #3a3a5a;
+        }
+        
+        .member-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #ccc;
+            font-size: 12px;
+        }
+        
+        .member-actions {
+            display: flex;
+            gap: 5px;
+            justify-content: flex-end;
+        }
+        
+        .btn-small {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .btn-success { background: #28a745; }
+        .btn-warning { background: #ffc107; color: black; }
+        
+        .team-vault-section, .activity-log-section, .team-members-section {
+            background: rgba(40, 40, 70, 0.8);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 1px solid #4a4a8a;
+        }
+        
+        .team-vault-section h3, .activity-log-section h3, .team-members-section h3 {
+            color: #00ffff;
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #00ffff;
+            padding-bottom: 10px;
+        }
+        
+        .vault-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .vault-item {
+            background: rgba(60, 60, 90, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 1px solid #5a5a9a;
+        }
+        
+        .vault-icon {
+            font-size: 32px;
+        }
+        
+        .vault-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #feca57;
+        }
+        
+        .vault-label {
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        .activity-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid #3a3a5a;
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-icon {
+            font-size: 20px;
+            width: 30px;
+            text-align: center;
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-text {
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+        
+        .activity-text strong {
+            color: white;
+        }
+        
+        .activity-time {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .no-team-view {
+            text-align: center;
+            padding: 60px 40px;
+            color: #ccc;
+            background: rgba(40, 40, 70, 0.8);
+            border-radius: 15px;
+            margin: 20px;
+            border: 2px solid #4a4a8a;
+        }
+        
+        .no-team-icon {
+            font-size: 80px;
+            color: #00ffff;
+            margin-bottom: 20px;
+        }
+        
+        .no-team-view h2 {
+            color: #00ffff;
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+        
+        .no-team-view p {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .no-team-actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        
+        .team-benefits {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #4a4a8a;
+        }
+        
+        .team-benefits h3 {
+            color: #00ffff;
+            margin-bottom: 25px;
+            text-align: center;
+            font-size: 24px;
+        }
+        
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .benefit-item {
+            text-align: center;
+            padding: 25px 20px;
+            background: rgba(60, 60, 90, 0.6);
+            border-radius: 12px;
+            border: 1px solid #5a5a9a;
+            transition: transform 0.3s ease;
+        }
+        
+        .benefit-item:hover {
+            transform: translateY(-5px);
+        }
+        
+        .benefit-item i {
+            font-size: 36px;
+            color: #00ffff;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        .benefit-item strong {
+            display: block;
+            color: white;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .benefit-item span {
+            color: #ccc;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .loading, .error, .no-teams, .no-members, .no-activity {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+            font-size: 18px;
+            background: rgba(40, 40, 70, 0.8);
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #4a4a8a;
+        }
+        
+        /* Team cards for browsing */
+        .team-card {
+            background: rgba(40, 40, 70, 0.8);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 1px solid #4a4a8a;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+        
+        .team-card:hover {
+            transform: translateY(-5px);
+            border-color: #00ffff;
+        }
+        
+        .team-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .team-emblem img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin-right: 15px;
+            border: 2px solid #3a3a5a;
+        }
+        
+        .team-info h3 {
+            margin: 0 0 5px 0;
+            color: #00ffff;
+            font-size: 20px;
+        }
+        
+        .team-tag {
+            color: #ccc;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .team-level {
+            color: #feca57;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .team-description {
+            color: #ccc;
+            margin: 15px 0;
+            line-height: 1.4;
+        }
+        
+        .team-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+            padding: 15px 0;
+            border-top: 1px solid #3a3a5a;
+            border-bottom: 1px solid #3a3a5a;
+        }
+        
+        .team-stat {
+            text-align: center;
+            color: #ccc;
+        }
+        
+        .team-stat i {
+            display: block;
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: #00ffff;
+        }
+        
+        .team-join-info {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            font-size: 12px;
+        }
+        
+        .join-type {
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        
+        .join-type.open { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
+        .join-type.approval { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .join-type.invite { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+        
+        .min-level {
+            color: #ccc;
+        }
+        
+        .team-actions {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        /* Modal styles */
+        .modal-content {
+            background: rgba(40, 40, 70, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            border: 2px solid #4a4a8a;
+            color: white;
+            max-width: 500px;
+            margin: 50px auto;
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #ccc;
+        }
+
+        .close:hover {
+            color: white;
+        }
+
+        .donate-options {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .donate-option {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #4a4a8a;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .donate-option.active {
+            border-color: #00ffff;
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .currency-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .amount-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .amount-btn {
+            padding: 10px;
+            border: 1px solid #4a4a8a;
+            background: rgba(60, 60, 90, 0.6);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .amount-btn:hover {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: #00ffff;
+        }
+
+        .custom-amount input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(60, 60, 90, 0.6);
+            border: 1px solid #4a4a8a;
+            border-radius: 5px;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .donate-preview {
+            background: rgba(60, 60, 90, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .preview-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+
+        .preview-bonus {
+            text-align: center;
+            color: #00ff88;
+            margin-top: 10px;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ========== INITIALIZATION ==========
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Team system DOM loaded');
+    if (window.location.pathname.includes('teams.html') || document.getElementById('team-container')) {
+        console.log('✅ Teams page detected, initializing...');
+        initializeTeamSystem();
+        
+    }
+});
+
+// Export functions to global scope
+window.initializeTeamSystem = initializeTeamSystem;
+window.searchTeams = searchTeams;
+window.createTeam = createTeam;
+window.joinTeam = joinTeam;
+window.requestToJoinTeam = requestToJoinTeam;
+window.leaveTeam = leaveTeam;
+window.promoteToOfficer = promoteToOfficer;
+window.demoteToMember = demoteToMember;
+window.kickMember = kickMember;
+window.showDonateModal = showDonateModal;
+window.processDonation = processDonation;
+window.switchTeamsTab = switchTeamsTab;
+window.upgradeTeamLevel = upgradeTeamLevel;
+window.debugTeamLoading = debugTeamLoading;
+window.debugTeamPermissions = debugTeamPermissions;
 // ========== ACHIEVEMENTS SYSTEM FUNCTIONS ==========
 async function initializeAchievements() {
     console.log('🏆 Initializing achievements system...');
@@ -7956,6 +10847,16 @@ window.unequipItem = unequipItem;
 window.sellInventoryItem = sellInventoryItem;
 window.handleSignup = handleSignup;
 window.signup = signup;
+console.log('🔧 Initializing team system global variables...');
+window.currentTeam = null;
+window.teamMembers = [];
+window.teamJoinRequests = [];
+window.currentTeamsTab = 'my-team'; // Default tab
+
+if (typeof currentTeam === 'undefined') window.currentTeam = null;
+if (typeof teamMembers === 'undefined') window.teamMembers = [];
+if (typeof teamJoinRequests === 'undefined') window.teamJoinRequests = [];
+if (typeof currentTeamsTab === 'undefined') window.currentTeamsTab = 'my-team';
 
 // ========== CSS STYLES ==========
 const style = document.createElement('style');
