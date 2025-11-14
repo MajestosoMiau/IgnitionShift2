@@ -8154,7 +8154,7 @@ window.leaveTeam = async function() {
                 userId: user.uid,
                 username: window.gameState?.player?.username || user.email.split('@')[0],
                 action: 'left the team',
-                timestamp: serverTimestamp()
+                timestamp: new Date()
             })
         });
 
@@ -8195,7 +8195,7 @@ window.promoteToOfficer = async function(memberId) {
                 userId: memberId,
                 username: member.username,
                 action: 'was promoted to officer',
-                timestamp: serverTimestamp()
+                timestamp: new Date()
             })
         });
 
@@ -8224,7 +8224,7 @@ window.demoteToMember = async function(memberId) {
                 userId: memberId,
                 username: member.username,
                 action: 'was demoted to member',
-                timestamp: serverTimestamp()
+                timestamp: new Date()
             })
         });
 
