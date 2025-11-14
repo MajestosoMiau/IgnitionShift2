@@ -6330,3 +6330,8 @@ body.resting .challenge-actions .decline-btn {
     padding: 20px;
     color: #888;
 }
+
+.teams-icon, .nav-icon.teams {
+    font-size: 20px !important;
+    display: inline-block !important;
+}

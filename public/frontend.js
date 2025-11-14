@@ -9129,11 +9129,6 @@ window.showJoinRequests = function() {
     alert('Join requests functionality to be implemented');
 };
 
-window.viewPlayerProfile = function(playerId, username, level) {
-    console.log('View profile:', playerId, username, level);
-    alert(`Viewing profile of ${username} (Level ${level}) - functionality to be implemented`);
-};
-
 // ========== CSS INJECTION ==========
 function injectTeamCSS() {
     if (document.getElementById('team-system-css')) return;
