@@ -7118,7 +7118,7 @@ const TEAM_LEVEL_CONFIG = {
 const TEAM_EMBLEMS = [
     'dragon_emblem', 'phoenix_emblem', 'wolf_emblem', 'lion_emblem', 
     'eagle_emblem', 'shark_emblem', 'tiger_emblem', 'bear_emblem',
-    'falcon_emblem', 'panther_emblem', 'viper_emblem', 'rhino_emblem'
+    'falcon_emblem', 'reindeer_emblem'
 ];
 
 // Team level image configuration
@@ -10826,6 +10826,354 @@ document.addEventListener('DOMContentLoaded', function() {
     
     
 });
+
+
+
+// ========= IGNITION TOKENS ==========
+// Initialize Stripe
+const stripe = Stripe('your_publishable_key_here');
+
+// Stripe purchase function
+window.purchaseWithStripe = async function(packageId, packageName, tokenAmount, price) {
+    try {
+        showLoadingModal('Processing payment...');
+        
+        const response = await fetch('/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                packageId: packageId,
+                packageName: packageName,
+                tokenAmount: tokenAmount,
+                price: price,
+                userId: auth.currentUser.uid,
+                userEmail: auth.currentUser.email,
+                paymentMethod: 'stripe'
+            }),
+        });
+
+        const session = await response.json();
+
+        const result = await stripe.redirectToCheckout({
+            sessionId: session.id,
+        });
+
+        if (result.error) {
+            closeLoadingModal();
+            alert(result.error.message);
+        }
+    } catch (error) {
+        console.error('Stripe Error:', error);
+        closeLoadingModal();
+        alert('Error processing Stripe payment');
+    }
+};
+
+
+// Initialize PayPal
+let paypalInitialized = false;
+
+function initializePayPalButtons() {
+    if (paypalInitialized) return;
+    
+    // Load PayPal SDK
+    const script = document.createElement('script');
+    script.src = 'https://www.paypal.com/sdk/js?client-id=your_paypal_client_id&currency=USD';
+    script.onload = function() {
+        TOKEN_PACKAGES.forEach(pkg => {
+            const container = document.getElementById(`paypal-button-${pkg.id}`);
+            if (container) {
+                paypal.Buttons({
+                    style: {
+                        layout: 'vertical',
+                        color: 'gold',
+                        shape: 'rect',
+                        label: 'paypal'
+                    },
+                    createOrder: function(data, actions) {
+                        return actions.order.create({
+                            purchase_units: [{
+                                description: `${pkg.tokens + pkg.bonus} Ignition Tokens - ${pkg.name}`,
+                                amount: {
+                                    value: pkg.price.toString(),
+                                    currency_code: 'USD'
+                                }
+                            }]
+                        });
+                    },
+                    onApprove: function(data, actions) {
+                        showLoadingModal('Processing PayPal payment...');
+                        return actions.order.capture().then(function(details) {
+                            return processPayPalPayment(details, pkg.id, auth.currentUser.uid);
+                        });
+                    },
+                    onError: function(err) {
+                        console.error('PayPal Error:', err);
+                        alert('PayPal payment failed. Please try again.');
+                    }
+                }).render(container);
+            }
+        });
+        paypalInitialized = true;
+    };
+    document.head.appendChild(script);
+}
+
+// Process PayPal payment
+async function processPayPalPayment(details, packageId, userId) {
+    try {
+        const response = await fetch('/process-paypal-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                packageId: packageId,
+                transactionId: details.id,
+                payerEmail: details.payer.email_address,
+                amount: details.purchase_units[0].amount.value,
+                userId: userId,
+                paymentMethod: 'paypal'
+            }),
+        });
+
+        const result = await response.json();
+        
+        closeLoadingModal();
+        
+        if (result.success) {
+            alert(`🎉 Payment successful! ${result.tokensAdded} tokens added to your account.`);
+            closeModal('token-store-modal');
+            // Refresh player data
+            if (typeof loadPlayerData === 'function') {
+                loadPlayerData(userId);
+            }
+        } else {
+            alert('Payment processing failed. Please contact support.');
+        }
+    } catch (error) {
+        console.error('PayPal Processing Error:', error);
+        closeLoadingModal();
+        alert('Error processing PayPal payment');
+    }
+}
+
+// Token packages configuration
+const TOKEN_PACKAGES = [
+    {
+        id: 'starter',
+        name: 'Starter Pack',
+        tokens: 100,
+        price: 1.00,
+        bonus: 0,
+        popular: false
+    },
+    {
+        id: 'racer',
+        name: 'Racer Pack', 
+        tokens: 500,
+        price: 3.99,
+        bonus: 25,
+        popular: true
+    },
+    {
+        id: 'pro',
+        name: 'Pro Racer Pack',
+        tokens: 1000,
+        price: 7.99,
+        bonus: 100,
+        popular: false
+    },
+    {
+        id: 'champion',
+        name: 'Champion Pack',
+        tokens: 1500,
+        price: 13.99,
+        bonus: 300,
+        popular: false
+    },
+    {
+        id: 'elite',
+        name: 'Elite Pack',
+        tokens: 3000,
+        price: 22.99,
+        bonus: 750,
+        popular: false
+    }
+];
+
+// Token store modal
+window.showTokenStore = function() {
+    const modal = document.getElementById('token-store-modal');
+    if (!modal) return;
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('token-store-modal')">&times;</span>
+            <h2>💎 Buy Ignition Tokens</h2>
+            <p class="store-description">Premium currency for exclusive items and features</p>
+            
+            <div class="current-balance">
+                <div class="balance-display">
+                    <span class="token-icon">💎</span>
+                    <span class="balance-amount">${window.gameState?.player?.tokens || 0}</span>
+                    <span class="balance-label">Your Tokens</span>
+                </div>
+            </div>
+
+            <div class="token-packages">
+                ${TOKEN_PACKAGES.map(pkg => `
+                    <div class="token-package ${pkg.popular ? 'popular' : ''}">
+                        ${pkg.popular ? '<div class="popular-badge">MOST POPULAR</div>' : ''}
+                        <div class="package-header">
+                            <h3>${pkg.name}</h3>
+                            <div class="token-amount">${pkg.tokens} Tokens</div>
+                        </div>
+                        <div class="package-bonus">
+                            ${pkg.bonus > 0 ? `+${pkg.bonus} Bonus Tokens!` : ''}
+                        </div>
+                        <div class="package-price">
+                            $${pkg.price}
+                        </div>
+                        
+                        <!-- Payment Options -->
+                        <div class="payment-options">
+                            <button class="btn-stripe purchase-btn" 
+                                    onclick="purchaseWithStripe('${pkg.id}', '${pkg.name}', ${pkg.tokens + pkg.bonus}, ${pkg.price})">
+                                <i class="fab fa-stripe"></i> Buy with Stripe
+                            </button>
+                            <div id="paypal-button-${pkg.id}" class="paypal-button-container"></div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="payment-security">
+                <div class="security-badges">
+                    <span>🔒 Secure Payment</span>
+                    <span>🛡️ SSL Encrypted</span>
+                    <span>💳 Multiple Methods</span>
+                </div>
+                <div class="payment-logos">
+                    <img src="images/stripe-logo.png" alt="Stripe" class="payment-logo">
+                    <img src="images/paypal-logo.png" alt="PayPal" class="payment-logo">
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'block';
+    
+    // Initialize PayPal buttons for each package
+    initializePayPalButtons();
+};
+
+// Add token store button to your UI
+function addTokenStoreButton() {
+    const tokenButton = document.createElement('button');
+    tokenButton.className = 'btn-primary token-store-btn';
+    tokenButton.innerHTML = '💎 Buy Tokens';
+    tokenButton.onclick = showTokenStore;
+    
+    // Add to your navigation or header
+    document.querySelector('.navbar-actions').appendChild(tokenButton);
+}
+
+// Cloud Function for Stripe
+exports.createStripeCheckoutSession = functions.https.onRequest(async (req, res) => {
+    corsHandler(req, res, async () => {
+        try {
+            const { packageId, packageName, tokenAmount, price, userId, userEmail } = req.body;
+
+            const session = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                line_items: [{
+                    price_data: {
+                        currency: 'usd',
+                        product_data: {
+                            name: `${tokenAmount} Ignition Tokens - ${packageName}`,
+                            description: 'Premium game currency'
+                        },
+                        unit_amount: Math.round(price * 100), // Convert to cents
+                    },
+                    quantity: 1,
+                }],
+                mode: 'payment',
+                success_url: `${YOUR_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${YOUR_DOMAIN}/payment-cancel`,
+                customer_email: userEmail,
+                metadata: {
+                    userId: userId,
+                    packageId: packageId,
+                    tokenAmount: tokenAmount
+                }
+            });
+
+            res.json({ id: session.id });
+        } catch (error) {
+            console.error('Stripe Session Error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+});
+
+// Cloud Function for PayPal
+exports.processPayPalPayment = functions.https.onRequest(async (req, res) => {
+    corsHandler(req, res, async () => {
+        try {
+            const { packageId, transactionId, amount, userId, paymentMethod } = req.body;
+
+            // Verify PayPal payment (you'd use PayPal SDK here)
+            const paymentVerified = await verifyPayPalPayment(transactionId, amount);
+            
+            if (!paymentVerified) {
+                throw new Error('Payment verification failed');
+            }
+
+            // Get package and add tokens
+           // const package = TOKEN_PACKAGES.find(p => p.id === packageId); --re-add later
+           // const totalTokens = package.tokens + package.bonus;  --re-add later
+
+            // Update user
+            await admin.firestore().collection('users').doc(userId).update({
+                tokens: admin.firestore.FieldValue.increment(totalTokens),
+                totalSpent: admin.firestore.FieldValue.increment(parseFloat(amount)),
+                lastPurchase: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Record transaction
+            await admin.firestore().collection('transactions').doc(transactionId).set({
+                userId: userId,
+                packageId: packageId,
+                tokenAmount: totalTokens,
+                amountPaid: parseFloat(amount),
+                paymentMethod: paymentMethod,
+                status: 'completed',
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            res.json({ success: true, tokensAdded: totalTokens });
+        } catch (error) {
+            console.error('PayPal Processing Error:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+});
+
+
+// Handle successful payments (for redirects)
+function handlePaymentSuccess() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    
+    if (sessionId) {
+        // Verify Stripe payment was successful
+        verifyStripePayment(sessionId);
+    }
+}
+
 
 
 // ========== GLOBAL FUNCTION EXPORTS ==========
