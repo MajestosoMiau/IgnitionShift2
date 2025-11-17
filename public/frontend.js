@@ -102,6 +102,14 @@ window.testFirestorePermissions = async function() {
     }
 };
 
+function getFunctions() {
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    return firebase.functions();
+}
+
+
 // ========== SIGNUP FUNCTION ==========
 window.signup = async function(email, password) {
     try {
@@ -398,6 +406,18 @@ async function createNewPlayer(uid, email) {
             ],
             trainingCooldowns: {},
             trainingHistory: [],
+            referralCode: generateReferralCode(), // unique code
+             referredBy: "referrerUserId", // who referred this user
+            referralEarnings: {
+            tokens: 0, // pending token reward
+            goldCommission: 0 // accumulated gold commission
+            },
+            
+            referralStats: {
+    totalReferred: 0,
+    activeReferred: 0,
+    totalEarned: 0
+  },
             createdAt: serverTimestamp()
         };
         
@@ -642,6 +662,79 @@ async function addXP(userId, xpAmount) {
     }
 }
 
+// ========== REFERRAL SECTION ==========
+// Referral section in profile/settings
+function showReferralSection() {
+    return `
+        <div class="referral-section">
+            <h3>🎯 Referral Program</h3>
+            
+            <div class="referral-stats">
+                <div class="stat-card">
+                    <span class="stat-number">${userData.referralStats?.totalReferred || 0}</span>
+                    <span class="stat-label">Total Referred</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${userData.referralStats?.activeReferred || 0}</span>
+                    <span class="stat-label">Active Players</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">${userData.referralStats?.totalEarned || 0}</span>
+                    <span class="stat-label">Total Earned</span>
+                </div>
+            </div>
+            
+            <div class="referral-link">
+                <label>Your Referral Link:</label>
+                <div class="link-container">
+                    <input type="text" readonly value="https://majestosomiau.github.io/IgnitionShift2?ref=${userData.referralCode}" id="referral-link">
+                    <button onclick="copyReferralLink()">📋 Copy</button>
+                </div>
+            </div>
+            
+            <div class="pending-rewards">
+                <h4>Pending Rewards</h4>
+                <div class="reward-item">
+                    <span>💎 Tokens: ${userData.referralEarnings?.tokens || 0}</span>
+                    <button onclick="claimTokens()" ${(userData.referralEarnings?.tokens || 0) === 0 ? 'disabled' : ''}>Claim</button>
+                </div>
+                <div class="reward-item">
+                    <span>💰 Gold Commission: ${userData.referralEarnings?.goldCommission || 0}</span>
+                    <button onclick="claimGold()" ${(userData.referralEarnings?.goldCommission || 0) === 0 ? 'disabled' : ''}>Claim</button>
+                </div>
+            </div>
+            
+            <div class="referral-benefits">
+                <h4>🎁 Referral Benefits</h4>
+                <ul>
+                    <li>✅ 50 💎 Tokens when referred player reaches Level 7</li>
+                    <li>✅ 2% of referred player's gold earnings (daily)</li>
+                    <li>✅ Special badge for top referrers</li>
+                </ul>
+            </div>
+        </div>
+    `;
+}
+
+// When creating a new user, add this to their data
+function generateReferralCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Handle referral on signup
+function handleReferralOnSignup() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    
+    if (refCode && auth.currentUser) {
+        // Save referral to user profile
+        firebase.firestore().collection('users').doc(auth.currentUser.uid).update({
+            referredBy: refCode
+        });
+    }
+}
+
+
 // ========== CONDITION RECOVERY SYSTEM ==========
 const CONDITION_RECOVERY_RATES = {
     online: 2,
@@ -705,7 +798,7 @@ function loadNavbar() {
         <nav class="navbar">
             <div class="nav-container">
                 <a href="index.html" class="nav-logo">
-                    <img src="images/logo.jpg" alt="IGNITION SHIFT" class="logo-image">
+                    <img src="images/logo.png" alt="IGNITION SHIFT" class="logo-image">
                 </a>
                 <div class="nav-menu">
                     <a href="index.html" class="nav-link" id="nav-home"><i class="fas fa-home"></i> Home</a>
@@ -716,7 +809,8 @@ function loadNavbar() {
                     <a href="marketplace.html" class="nav-link" id="nav-marketplace"><i class="fas fa-shop"></i> Marketplace</a>
                     <a href="rankings.html" class="nav-link" id="nav-rankings"><i class="fas fa-trophy"></i> Rankings</a>
                     <a href="missions.html" class="nav-link" id="nav-missions"><i class="fas fa-flag-checkered"></i> Missions <span id="challenge-indicator" class="nav-notification" style="display: none;"></span></a>
-                    <a href="achievements.html" class="nav-link" id="nav-achievements"><i class="fas fa-trophy-alt"></i> Achievements <span id="challenge-indicator" class="nav-notification" style="display: none;"></span></a>
+                    <a href="achievements.html" class="nav-link" id="nav-achievements"><i class="fa-solid fa-star"></i> Achievements <span id="challenge-indicator" class="nav-notification" style="display: none;"></span></a>
+                    <button onclick="logout()" class="logout-btn-compact">Logout</button>
                 </div>
             </div>
         </nav>
@@ -1286,18 +1380,20 @@ function updatePlayerUI(userData) {
             "xp": `${currentXP}/${xpRequired}`,
             "condition": `${Math.floor(userData.condition || 100)}%`,
             "shop-gold": userData.gold || 0,
-            "power": stats.power || 10,
-            "speed": stats.speed || 10,
-            "dexterity": stats.dexterity || 10,
-            "handling": stats.handling || 10,
-            "structure": stats.structure || 10,
-            "luck": stats.luck || 10,
-            "power-display": stats.power || 10,
-            "speed-display": stats.speed || 10,
-            "dexterity-display": stats.dexterity || 10,
-            "handling-display": stats.handling || 10,
-            "structure-display": stats.structure || 10,
-            "luck-display": stats.luck || 10
+            "power": stats.power || 5,
+            "speed": stats.speed || 5,
+            "dexterity": stats.dexterity || 5,
+            "handling": stats.handling || 5,
+            "structure": stats.structure || 5,
+            "luck": stats.luck || 5,
+            "power-display": stats.power || 5,
+            "speed-display": stats.speed || 5,
+            "dexterity-display": stats.dexterity || 5,
+            "handling-display": stats.handling || 5,
+            "structure-display": stats.structure || 5,
+            "luck-display": stats.luck || 5,
+            "stats-gold": userData.gold || 0,        
+            "stats-tokens": userData.tokens || 0
         };
         
         for (const [id, value] of Object.entries(elements)) {
@@ -3728,6 +3824,7 @@ function showEnhancedRaceResultsModal(results) {
 }
 
 // FIXED: Enhanced notifications modal without spam
+// REPLACE this function in your existing code:
 function showEnhancedNotificationsModal(notifications) {
     const existingModal = document.getElementById('enhanced-notifications-modal');
     if (existingModal) existingModal.remove();
@@ -3757,52 +3854,164 @@ function showEnhancedNotificationsModal(notifications) {
         overflow-y: auto;
         box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
         font-family: 'Orbitron', sans-serif;
+        animation: slideInRight 0.3s ease;
     `;
     
-    const notificationsHTML = filteredNotifications.map(notif => `
-        <div class="enhanced-notification" style="
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(0, 255, 136, 0.05));
-            border-radius: 10px;
-            border-left: 4px solid #00ffff;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        ">
-            <div style="font-weight: bold; color: #00ffff; margin-bottom: 0.5rem; font-size: 1.1rem;">
-                🏁 Race Update
+    const notificationsHTML = filteredNotifications.map(notif => {
+        const isAuto = notif.data?.autoGenerated;
+        const isChallenge = notif.type === 'pvp_challenge';
+        const isResult = notif.type === 'race_result';
+        
+        return `
+            <div class="enhanced-notification" style="
+                padding: 1rem;
+                margin-bottom: 1rem;
+                background: linear-gradient(135deg, 
+                    ${isAuto ? 'rgba(155, 89, 182, 0.2)' : 
+                      isChallenge ? 'rgba(0, 255, 255, 0.1)' : 
+                      'rgba(46, 204, 113, 0.1)'}, 
+                    ${isAuto ? 'rgba(142, 68, 173, 0.1)' : 
+                      isChallenge ? 'rgba(0, 255, 136, 0.05)' : 
+                      'rgba(39, 174, 96, 0.05)'}
+                );
+                border-radius: 10px;
+                border-left: 4px solid ${isAuto ? '#9b59b6' : isChallenge ? '#00ffff' : '#2ecc71'};
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                    <div style="font-weight: bold; color: ${isAuto ? '#9b59b6' : isChallenge ? '#00ffff' : '#2ecc71'}; font-size: 1.1rem;">
+                        ${isAuto ? '🤖 Auto-Match' : isChallenge ? '🏁 Challenge' : '🏁 Race Complete'}
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove(); checkEmptyNotifications()" 
+                            style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 1.2rem; padding: 0; margin: -5px -5px 0 0;">×</button>
+                </div>
+                <div style="margin-bottom: 0.5rem; line-height: 1.4;">${notif.message}</div>
+                ${notif.data?.betAmount ? `<div style="color: #ffd700; margin-bottom: 0.5rem;">💰 Bet: ${notif.data.betAmount} gold</div>` : ''}
+                <div style="font-size: 0.8rem; color: #88ffff; display: flex; justify-content: space-between;">
+                    <span>${formatNotificationTime(notif.timestamp)}</span>
+                    ${isAuto ? '<span>🤖 AUTO</span>' : ''}
+                </div>
             </div>
-            <div style="margin-bottom: 0.5rem; line-height: 1.4;">${notif.message}</div>
-            <div style="font-size: 0.8rem; color: #88ffff; display: flex; justify-content: space-between;">
-                <span>${formatNotificationTime(notif.timestamp)}</span>
-                ${notif.challengeId ? '<span>#' + notif.challengeId.slice(-6) + '</span>' : ''}
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     modal.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="color: #00ffff; margin: 0; font-size: 1.3rem;">📬 Race Notifications</h3>
-            <button onclick="document.getElementById('enhanced-notifications-modal').remove()" 
-                    style="background: none; border: none; color: #ff6b6b; font-size: 1.5rem; cursor: pointer; padding: 0;">&times;</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #00ffff; padding-bottom: 0.5rem;">
+            <h3 style="color: #00ffff; margin: 0; font-size: 1.3rem;">
+                📬 ${filteredNotifications.length} New Update${filteredNotifications.length > 1 ? 's' : ''}
+            </h3>
+            <div>
+                <button onclick="closeAllNotifications()" 
+                        style="background: rgba(255, 107, 107, 0.2); color: #ff6b6b; border: 1px solid #ff6b6b; padding: 0.3rem 0.8rem; border-radius: 15px; cursor: pointer; font-size: 0.8rem; margin-right: 0.5rem;">
+                    Close All
+                </button>
+                <button onclick="document.getElementById('enhanced-notifications-modal').remove()" 
+                        style="background: none; border: none; color: #ff6b6b; font-size: 1.5rem; cursor: pointer; padding: 0;">&times;</button>
+            </div>
         </div>
-        <div>
+        <div id="notifications-container">
             ${notificationsHTML}
         </div>
-        <div style="text-align: center; margin-top: 1rem;">
-            <button onclick="document.getElementById('enhanced-notifications-modal').remove()" 
-                    style="background: linear-gradient(135deg, #00ff88, #00ffff); color: #1a1a2e; border: none; padding: 0.5rem 1.5rem; border-radius: 20px; cursor: pointer; font-weight: bold;">
-                Close
-            </button>
+        <div style="text-align: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #333;">
+            <small style="color: #88ffff; opacity: 0.7;">
+                Notifications auto-hide in <span id="countdown">10</span>s
+            </small>
         </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Auto-close after 8 seconds
-    setTimeout(() => {
-        if (modal.parentNode) modal.remove();
-    }, 8000);
+    // Add countdown timer
+    let countdown = 10;
+    const countdownElement = document.getElementById('countdown');
+    const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdownElement) {
+            countdownElement.textContent = countdown;
+        }
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            if (modal.parentNode) {
+                modal.remove();
+            }
+        }
+    }, 1000);
+    
+    // Stop countdown when hovering over modal
+    modal.addEventListener('mouseenter', () => {
+        clearInterval(countdownInterval);
+        if (countdownElement) {
+            countdownElement.textContent = '∞';
+        }
+    });
+    
+    // Restart countdown when mouse leaves (with remaining time)
+    modal.addEventListener('mouseleave', () => {
+        let remaining = countdown;
+        const newInterval = setInterval(() => {
+            remaining--;
+            if (countdownElement) {
+                countdownElement.textContent = remaining;
+            }
+            if (remaining <= 0) {
+                clearInterval(newInterval);
+                if (modal.parentNode) {
+                    modal.remove();
+                }
+            }
+        }, 1000);
+    });
 }
+
+// ADD these helper functions at the bottom of your file:
+function checkEmptyNotifications() {
+    const modal = document.getElementById('enhanced-notifications-modal');
+    if (modal) {
+        const notificationsContainer = document.getElementById('notifications-container');
+        if (notificationsContainer && notificationsContainer.children.length === 0) {
+            modal.remove();
+        }
+    }
+}
+
+function closeAllNotifications() {
+    const modal = document.getElementById('enhanced-notifications-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// ADD this CSS for the slide-in animation (if not already in your styles):
+const notificationCSS = `
+@keyframes slideInRight {
+    from { 
+        transform: translateX(100%); 
+        opacity: 0;
+    }
+    to { 
+        transform: translateX(0); 
+        opacity: 1;
+    }
+}
+
+.enhanced-notification {
+    transition: all 0.3s ease;
+}
+
+.enhanced-notification:hover {
+    transform: translateX(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+`;
+
+// Inject the CSS if not already present
+if (!document.querySelector('#notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'notification-styles';
+    style.textContent = notificationCSS;
+    document.head.appendChild(style);
+}
+
 
 // FIXED: Enhanced PVP race completion with better notifications
 async function completeEnhancedPVPRace(challengeId, challenge) {
@@ -4036,20 +4245,33 @@ function calculateEnhancedRaceTime(playerData, track, levelDifference, opponentL
     const stats = playerData.stats || {};
     const equipment = calculateTotalStats(stats, playerData.inventory);
     
-    let baseTime = 120;
+    // MUCH LONGER base times
+    const trackBaseTimes = {
+        'easy': 180,      // 3 minutes base
+        'medium': 240,    // 4 minutes base  
+        'hard': 300       // 5 minutes base
+    };
+    
+    const trackDifficulty = track?.difficulty || 'medium';
+    let baseTime = trackBaseTimes[trackDifficulty] || 240;
+    
+    // Apply track distance multiplier
+    const trackDistance = track?.distance || 5;
+    baseTime *= (trackDistance / 5);
     
     const statModifiers = {
-        speed: 0.025,
-        handling: 0.02,
-        power: 0.015,
-        dexterity: 0.01,
-        luck: 0.005
+        speed: 0.03,
+        handling: 0.025,
+        power: 0.02,
+        dexterity: 0.015,
+        luck: 0.008
     };
     
     let timeModifier = 1.0;
     
     Object.entries(statModifiers).forEach(([stat, modifier]) => {
-        timeModifier -= (equipment.total[stat] || 0) * modifier;
+        const statValue = equipment.total[stat] || 0;
+        timeModifier -= Math.min(0.4, statValue * modifier);
     });
     
     const levelEffect = calculateLevelEffect(levelDifference, opponentLevel);
@@ -4058,10 +4280,15 @@ function calculateEnhancedRaceTime(playerData, track, levelDifference, opponentL
     const itemEffect = calculateItemEffects(playerData.inventory);
     timeModifier *= (1 + itemEffect);
     
-    timeModifier *= (0.90 + Math.random() * 0.2);
+    const randomVariation = 0.95 + (Math.random() * 0.1);
+    timeModifier *= randomVariation;
     
-    return Math.max(30, baseTime * timeModifier);
+    const minTimes = { 'easy': 120, 'medium': 160, 'hard': 200 };
+    const minTime = minTimes[trackDifficulty] || 160;
+    
+    return Math.max(minTime, baseTime * timeModifier);
 }
+
 
 // FIXED: Better level effect calculation
 function calculateLevelEffect(levelDifference, opponentLevel) {
@@ -4070,15 +4297,12 @@ function calculateLevelEffect(levelDifference, opponentLevel) {
     let baseEffect;
     
     if (levelDifference > 0) {
-        // Higher level player - should be faster
-        baseEffect = Math.max(-0.4, Math.min(-0.05, -levelDifference * 0.02));
+        baseEffect = Math.max(-0.6, Math.min(-0.1, -levelDifference * 0.03));
     } else {
-        // Lower level player - should be slower  
-        baseEffect = Math.max(0.05, Math.min(0.4, Math.abs(levelDifference) * 0.025));
+        baseEffect = Math.max(0.1, Math.min(0.6, Math.abs(levelDifference) * 0.035));
     }
     
-    const levelScale = Math.min(1.5, Math.max(0.5, opponentLevel / 30));
-    
+    const levelScale = Math.min(1.2, Math.max(0.8, opponentLevel / 25));
     return baseEffect * levelScale;
 }
 
@@ -4405,8 +4629,25 @@ function updateChallengeIndicator(pendingCount) {
     }
 }
 
-// FIXED: Enhanced PVP race function - updates BOTH players stats properly
 async function startEnhancedPVPRace(challengeId, challenge) {
+    console.log('🔍 DEBUG: Starting enhanced PvP race...');
+    console.log('🔍 DEBUG: Challenge ID:', challengeId);
+    console.log('🔍 DEBUG: Current user:', auth.currentUser.uid);
+    console.log('🔍 DEBUG: Challenger ID:', challenge.challengerId);
+    console.log('🔍 DEBUG: Target ID:', challenge.targetId);
+    
+    // Add permission check
+    const isChallenger = auth.currentUser.uid === challenge.challengerId;
+    const isTarget = auth.currentUser.uid === challenge.targetId;
+    console.log('🔍 DEBUG: User is challenger?', isChallenger);
+    console.log('🔍 DEBUG: User is target?', isTarget);
+    
+    if (!isChallenger && !isTarget) {
+        console.error('❌ User not authorized for this challenge');
+        alert('You are not authorized to run this race');
+        return;
+    }
+
     if (window.restSystem?.isResting) {
         alert('Cannot race while resting!');
         return false;
@@ -4419,8 +4660,7 @@ async function startEnhancedPVPRace(challengeId, challenge) {
     }
 
     try {
-        console.log('🏁 Starting ENHANCED PvP race for challenge:', challengeId);
-
+        console.log('🔍 DEBUG: Fetching user data...');
         // Get both players' data
         const userDoc = await getDoc(doc(db, "users", user.uid));
         const opponentId = user.uid === challenge.challengerId ? challenge.targetId : challenge.challengerId;
@@ -4432,6 +4672,25 @@ async function startEnhancedPVPRace(challengeId, challenge) {
 
         const userData = userDoc.data();
         const opponentData = opponentDoc.data();
+
+        // ADD GOLD CHECK HERE
+        console.log('🔍 DEBUG: User gold:', userData.gold);
+        console.log('🔍 DEBUG: Opponent gold:', opponentData.gold);
+        console.log('🔍 DEBUG: Bet amount:', challenge.betAmount);
+
+        if (userData.gold < challenge.betAmount) {
+            console.error('❌ User insufficient gold');
+            alert(`You don't have enough gold! Needed: ${challenge.betAmount}, You have: ${userData.gold}`);
+            return;
+        }
+
+        if (opponentData.gold < challenge.betAmount) {
+            console.error('❌ Opponent insufficient gold');
+            alert(`Opponent doesn't have enough gold! Challenge cancelled.`);
+            return;
+        }
+
+        console.log('🏁 Starting ENHANCED PvP race calculation...');
 
         // Calculate race times
         const userTime = calculateEnhancedRaceTime(userData, challenge.track, 
@@ -4514,64 +4773,40 @@ async function startEnhancedPVPRace(challengeId, challenge) {
         await updateDoc(doc(db, "challenges", challengeId), updateData);
         console.log('✅ Challenge updated successfully!');
 
-        // 🎯 FIXED: Update BOTH players stats properly
-        console.log('🔄 Updating BOTH players stats...');
-        
-        if (isDraw) {
-            // Draw - both players lose condition and get XP
-            await updateDoc(doc(db, "users", user.uid), {
-                condition: userData.condition - challenge.conditionCost
-            });
-            await addXP(user.uid, rewards.xpReward);
-            
-            await updateDoc(doc(db, "users", opponentId), {
-                condition: opponentData.condition - challenge.conditionCost
-            });
-            await addXP(opponentId, rewards.xpReward);
-            
-            console.log('🤝 Draw: Both players lost condition and gained XP');
-        } else {
-            if (user.uid === winnerId) {
-                // User wins - gains gold and fame
-                await updateDoc(doc(db, "users", user.uid), {
-                    condition: userData.condition - challenge.conditionCost,
-                    gold: userData.gold + rewards.goldTransfer,
-                    fame: (userData.fame || 0) + rewards.fameTransfer        
-                });
-                await addXP(user.uid, rewards.xpReward);
-                
-                // Opponent loses - loses gold
-                await updateDoc(doc(db, "users", opponentId), {
-                    condition: opponentData.condition - challenge.conditionCost,
-                    gold: Math.max(0, opponentData.gold - challenge.betAmount),
-                    fame: Math.max(0, (opponentData.fame || 0) - Math.floor(rewards.fameTransfer * 0.5))
-                });
-                await addXP(opponentId, Math.floor(rewards.xpReward * 0.3));
-                
-                console.log('🏆 User won: Gained gold/fame, opponent lost gold');
-                if (window.trackPVPWin) window.trackPVPWin();
-            } else {
-                // Opponent wins - gains gold and fame
-                await updateDoc(doc(db, "users", opponentId), {
-                    condition: opponentData.condition - challenge.conditionCost,
-                    gold: opponentData.gold + rewards.goldTransfer,
-                    fame: (opponentData.fame || 0) + rewards.fameTransfer        
-                });
-                await addXP(opponentId, rewards.xpReward);
-                
-                // User loses - loses gold
-                await updateDoc(doc(db, "users", user.uid), {
-                    condition: userData.condition - challenge.conditionCost,
-                    gold: Math.max(0, userData.gold - challenge.betAmount),
-                    fame: Math.max(0, (userData.fame || 0) - Math.floor(rewards.fameTransfer * 0.5))
-                });
-                await addXP(user.uid, Math.floor(rewards.xpReward * 0.3));
-                
-                console.log('😞 User lost: Lost gold, opponent gained gold/fame');
-            }
-        }
+        // 🎯 FIXED: Update ONLY current user's stats (not opponent's)
+console.log('🔄 Updating CURRENT user stats only...');
 
-        console.log('✅ Both players stats updated successfully!');
+if (isDraw) {
+    // Draw - current user loses condition and gets XP
+    await updateDoc(doc(db, "users", user.uid), {
+        condition: userData.condition - challenge.conditionCost
+    });
+    await addXP(user.uid, rewards.xpReward);
+    console.log('🤝 Draw: User lost condition and gained XP');
+} else {
+    if (user.uid === winnerId) {
+        // Current user wins - gains gold and fame
+        await updateDoc(doc(db, "users", user.uid), {
+            condition: userData.condition - challenge.conditionCost,
+            gold: userData.gold + rewards.goldTransfer,
+            fame: (userData.fame || 0) + rewards.fameTransfer        
+        });
+        await addXP(user.uid, rewards.xpReward);
+        console.log('🏆 User won: Gained gold/fame');
+        if (window.trackPVPWin) window.trackPVPWin();
+    } else {
+        // Current user loses - loses gold
+        await updateDoc(doc(db, "users", user.uid), {
+            condition: userData.condition - challenge.conditionCost,
+            gold: Math.max(0, userData.gold - challenge.betAmount),
+            fame: Math.max(0, (userData.fame || 0) - Math.floor(rewards.fameTransfer * 0.5))
+        });
+        await addXP(user.uid, Math.floor(rewards.xpReward * 0.3));
+        console.log('😞 User lost: Lost gold');
+    }
+}
+
+console.log('✅ Current user stats updated successfully!');
 
         // Create notifications for BOTH players
         console.log('📢 Creating notifications for both players...');
@@ -4689,13 +4924,103 @@ function showEnhancedRaceResults(challenge, time1, time2, winnerName, isDraw, re
 
 function getRandomTrack() {
     const tracks = [
-        { name: "Golden Horizon", difficulty: "medium", distance: 6 },
-        { name: "Nova Grandstand", difficulty: "hard", distance: 7 },
-        { name: "Crystal Speedway", difficulty: "easy", distance: 4 },
-        { name: "Ironclad Arena", difficulty: "medium", distance: 5 },
-        { name: "Steel Vortex", difficulty: "hard", distance: 6 }
+        { name: "Golden Horizon Sprint", difficulty: "easy", distance: 3 },
+        { name: "Metropolis Speedway", difficulty: "medium", distance: 5 },
+        { name: "Mountain Pass Circuit", difficulty: "hard", distance: 7 },
+        { name: "Coastal Highway", difficulty: "medium", distance: 6 },
+        { name: "Desert Dash", difficulty: "hard", distance: 8 },
+        { name: "Neon Downtown", difficulty: "medium", distance: 4 },
+        { name: "Forest Rally", difficulty: "hard", distance: 9 },
+        { name: "Arctic Loop", difficulty: "easy", distance: 4 },
+        { name: "Volcano Ascent", difficulty: "hard", distance: 10 }
     ];
     return tracks[Math.floor(Math.random() * tracks.length)];
+}
+
+// 4. ADD automated challenge system (put this at the end of your file):
+let automatedChallengeInterval;
+
+function startAutomatedChallengeSystem() {
+    console.log('🏁 Starting automated PvP challenge system...');
+    
+    automatedChallengeInterval = setInterval(() => {
+        if (auth.currentUser) {
+            generateAutomatedChallenge();
+        }
+    }, 60 * 60 * 1000);
+    
+    setTimeout(() => {
+        if (auth.currentUser) {
+            generateAutomatedChallenge();
+        }
+    }, 2 * 60 * 1000);
+}
+
+async function generateAutomatedChallenge() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        if (!userData || userData.level < 3) return;
+
+        const usersSnapshot = await getDocs(
+            query(
+                collection(db, "users"),
+                where("level", ">=", Math.max(1, userData.level - 3)),
+                where("level", "<=", userData.level + 3),
+                where("lastActive", ">=", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+            )
+        );
+
+        const potentialOpponents = usersSnapshot.docs
+            .filter(doc => doc.id !== user.uid)
+            .map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (potentialOpponents.length === 0) return;
+
+        const randomOpponent = potentialOpponents[Math.floor(Math.random() * potentialOpponents.length)];
+        const levelDiff = userData.level - randomOpponent.level;
+
+        const betAmount = calculateEnhancedBetAmount(
+            userData.gold || 0, 
+            userData.level, 
+            randomOpponent.level, 
+            userData.fame || 0
+        );
+
+        const challengeRef = await addDoc(collection(db, "challenges"), {
+            challengerId: user.uid,
+            challengerName: userData.username,
+            challengerLevel: userData.level,
+            targetId: randomOpponent.id,
+            targetName: randomOpponent.username,
+            targetLevel: randomOpponent.level,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            conditionCost: 15,
+            betAmount: betAmount,
+            track: getRandomTrack(),
+            levelDifference: levelDiff,
+            expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+            autoGenerated: true
+        });
+
+        await addDoc(collection(db, "notifications"), {
+            userId: randomOpponent.id,
+            type: 'pvp_challenge',
+            title: '🏁 Automated Challenge!',
+            message: `${userData.username} has been matched against you!`,
+            data: { challengeId: challengeRef.id, challengerName: userData.username, betAmount: betAmount },
+            read: false,
+            timestamp: serverTimestamp()
+        });
+
+    } catch (error) {
+        console.error('Error generating automated challenge:', error);
+    }
 }
 
 // ========== FIXED NOTIFICATION FUNCTION ==========
@@ -4741,6 +5066,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     onAuthStateChanged(auth, (user) => {
         if (user) {
+            startAutomatedChallengeSystem();
             checkPendingChallenges();
             setInterval(checkPendingChallenges, 120000);
         }
@@ -7150,8 +7476,7 @@ function getTeamEmblemPath(teamData) {
 
 function getTeamLevelBanner(teamLevel) {
     const level = Math.min(Math.max(1, teamLevel), 10);
-    const config = TEAM_LEVEL_CONFIG[level];
-    return config ? config.bannerImage : 'level_1_banner.jpg';
+    return `level${level}.jpg`; 
 }
 
 function getTeamLevelColor(teamLevel) {
@@ -8657,94 +8982,41 @@ window.upgradeTeamLevel = async function() {
 };
 
 // Fixed getLevelUpgradeSection function - better canUpgrade logic
-function getLevelUpgradeSection(team, currentLevel, canUpgrade, themeColor) {
+function getLevelUpgradeSection(team, currentLevel) {
     const nextLevel = currentLevel + 1;
     const nextLevelConfig = TEAM_LEVEL_CONFIG[nextLevel];
     
-    if (!nextLevelConfig) {
-        return `
-            <div class="level-upgrade-section max-level">
-                <h3>🏆 Maximum Level Reached!</h3>
-                <p>Your team has reached the highest level possible. Great work!</p>
-            </div>
-        `;
-    }
+    if (!nextLevelConfig) return '';
 
     const upgradeCost = TEAM_LEVEL_CONFIG[currentLevel].upgradeCost;
     const currentVaultGold = team.vault?.gold || 0;
-    const progressPercent = Math.min(100, (currentVaultGold / upgradeCost) * 100);
-
-    // Get user role safely
+    
     const user = auth.currentUser;
     const userRole = user ? getMemberRole(team, user.uid) : 'member';
-    const isLeader = userRole === 'founder' || userRole === 'officer';
-
-    // FIXED: Better canUpgrade calculation
-    const canActuallyUpgrade = currentVaultGold >= upgradeCost && isLeader;
+    const isLeader = userRole === 'founder' || userrole === 'officer';
+    const canUpgrade = currentVaultGold >= upgradeCost && isLeader;
 
     return `
-        <div class="level-upgrade-section ${canActuallyUpgrade ? 'can-upgrade' : ''}">
-            <div class="upgrade-header">
-                <h3>Level Up to ${nextLevel}</h3>
-                ${canActuallyUpgrade ? '<span class="upgrade-ready">Ready to Upgrade!</span>' : ''}
-            </div>
-            
-            <div class="upgrade-info">
-                <div class="upgrade-benefits">
-                    <h4>Benefits:</h4>
-                    <ul>
-                        <li>Max Members: ${team.maxMembers} → <strong>${nextLevelConfig.maxMembers}</strong></li>
-                        <li>New Banner: <strong>Level ${nextLevel} Banner</strong></li>
-                        <li>Prestige: <strong>Enhanced team appearance</strong></li>
-                    </ul>
+        <div class="upgrade-image-section">
+            <img src="${getTeamBannerURL(currentLevel)}" alt="Team Banner" class="team-banner-image">
+            <div class="upgrade-info-overlay">
+                <div class="upgrade-line">
+                    <span class="level-text">Level ${currentLevel} → ${nextLevel}</span>
+                    <span class="cost-text">${upgradeCost.toLocaleString()}g</span>
                 </div>
-                
-                <div class="upgrade-cost">
-                    <h4>Upgrade Cost:</h4>
-                    <div class="cost-display ${currentVaultGold >= upgradeCost ? 'can-afford' : 'cannot-afford'}">
-                        <span class="cost-amount">${upgradeCost.toLocaleString()} Gold</span>
-                        <span class="vault-amount">Vault: ${currentVaultGold.toLocaleString()} Gold</span>
-                    </div>
+                <div class="upgrade-line">
+                    <span class="vault-text">Vault: ${currentVaultGold.toLocaleString()}g</span>
+                    ${isLeader ? `
+                        <button class="btn-upgrade-tiny" onclick="upgradeTeamLevel()" ${!canUpgrade ? 'disabled' : ''}>
+                            ${canUpgrade ? '⚡' : '🔒'} Upgrade
+                        </button>
+                    ` : '<span class="leader-text">Leaders Only</span>'}
                 </div>
             </div>
-
-            <div class="upgrade-progress">
-                <div class="progress-info">
-                    <span>Progress to Level ${nextLevel}</span>
-                    <span>${Math.floor(progressPercent)}%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${progressPercent}%; background: ${themeColor};"></div>
-                </div>
-                <div class="progress-text">
-                    ${currentVaultGold.toLocaleString()} / ${upgradeCost.toLocaleString()} Gold
-                </div>
-            </div>
-
-            ${isLeader ? `
-                <div class="upgrade-actions">
-                    <button class="btn-primary upgrade-btn" onclick="upgradeTeamLevel()" ${!canActuallyUpgrade ? 'disabled' : ''}>
-                        <i class="fas fa-arrow-up"></i> 
-                        Upgrade to Level ${nextLevel}
-                    </button>
-                    ${!canActuallyUpgrade ? `
-                        <div class="upgrade-help">
-                            <i class="fas fa-info-circle"></i>
-                            ${currentVaultGold < upgradeCost ? 
-                                `Need ${(upgradeCost - currentVaultGold).toLocaleString()} more gold in vault` : 
-                                'Only team founders and officers can upgrade'}
-                        </div>
-                    ` : ''}
-                </div>
-            ` : `
-                <div class="upgrade-help">
-                    <i class="fas fa-info-circle"></i>
-                    Only team founders and officers can upgrade the team level
-                </div>
-            `}
         </div>
     `;
 }
+
 
 // Also update the displayTeamView function to pass the correct parameters
 function displayTeamView() {
@@ -10831,14 +11103,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ========= IGNITION TOKENS ==========
 // Initialize Stripe
-const stripe = Stripe('your_publishable_key_here');
+const stripe = Stripe('pk_live_51SToW6CmbJ7Sna9uwRtL5tKT02gwT0btmbYT1xup3YL7EZLlcaiuNzkWVv0aDTDas4vLwAeKbWoWgXfIUUdilWY000eQPXWRLF');
 
 // Stripe purchase function
 window.purchaseWithStripe = async function(packageId, packageName, tokenAmount, price) {
     try {
         showLoadingModal('Processing payment...');
         
-        const response = await fetch('/create-checkout-session', {
+        const response = await fetch('https://us-central1-projectgear-b6776.cloudfunctions.net/createStripeCheckout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -10848,29 +11120,20 @@ window.purchaseWithStripe = async function(packageId, packageName, tokenAmount, 
                 packageName: packageName,
                 tokenAmount: tokenAmount,
                 price: price,
-                userId: auth.currentUser.uid,
-                userEmail: auth.currentUser.email,
-                paymentMethod: 'stripe'
+                userId: auth.currentUser.uid
             }),
         });
 
-        const session = await response.json();
+        const result = await response.json();
+        closeLoadingModal();
+        window.location.href = result.url;
 
-        const result = await stripe.redirectToCheckout({
-            sessionId: session.id,
-        });
-
-        if (result.error) {
-            closeLoadingModal();
-            alert(result.error.message);
-        }
     } catch (error) {
         console.error('Stripe Error:', error);
         closeLoadingModal();
-        alert('Error processing Stripe payment');
+        alert('Error: ' + error.message);
     }
 };
-
 
 // Initialize PayPal
 let paypalInitialized = false;
@@ -10960,6 +11223,13 @@ async function processPayPalPayment(details, packageId, userId) {
     }
 }
 
+function closeLoadingModal() {
+    const loadingModal = document.getElementById('loading-modal');
+    if (loadingModal) {
+        loadingModal.style.display = 'none';
+    }
+}
+
 // Token packages configuration
 const TOKEN_PACKAGES = [
     {
@@ -11001,6 +11271,14 @@ const TOKEN_PACKAGES = [
         price: 22.99,
         bonus: 750,
         popular: false
+    },
+     {
+        id: 'godlike',
+        name: 'GODLIKE Pack',
+        tokens: 6000,
+        price: 43.99,
+        bonus: 1420,
+        popular: false
     }
 ];
 
@@ -11009,60 +11287,61 @@ window.showTokenStore = function() {
     const modal = document.getElementById('token-store-modal');
     if (!modal) return;
 
+    modal.className = "modal token-store-modal";
     modal.innerHTML = `
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('token-store-modal')">&times;</span>
-            <h2>💎 Buy Ignition Tokens</h2>
-            <p class="store-description">Premium currency for exclusive items and features</p>
-            
-            <div class="current-balance">
-                <div class="balance-display">
-                    <span class="token-icon">💎</span>
-                    <span class="balance-amount">${window.gameState?.player?.tokens || 0}</span>
-                    <span class="balance-label">Your Tokens</span>
-                </div>
-            </div>
-
-            <div class="token-packages">
-                ${TOKEN_PACKAGES.map(pkg => `
-                    <div class="token-package ${pkg.popular ? 'popular' : ''}">
-                        ${pkg.popular ? '<div class="popular-badge">MOST POPULAR</div>' : ''}
-                        <div class="package-header">
-                            <h3>${pkg.name}</h3>
-                            <div class="token-amount">${pkg.tokens} Tokens</div>
-                        </div>
-                        <div class="package-bonus">
-                            ${pkg.bonus > 0 ? `+${pkg.bonus} Bonus Tokens!` : ''}
-                        </div>
-                        <div class="package-price">
-                            $${pkg.price}
-                        </div>
-                        
-                        <!-- Payment Options -->
-                        <div class="payment-options">
-                            <button class="btn-stripe purchase-btn" 
-                                    onclick="purchaseWithStripe('${pkg.id}', '${pkg.name}', ${pkg.tokens + pkg.bonus}, ${pkg.price})">
-                                <i class="fab fa-stripe"></i> Buy with Stripe
-                            </button>
-                            <div id="paypal-button-${pkg.id}" class="paypal-button-container"></div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-
-            <div class="payment-security">
-                <div class="security-badges">
-                    <span>🔒 Secure Payment</span>
-                    <span>🛡️ SSL Encrypted</span>
-                    <span>💳 Multiple Methods</span>
-                </div>
-                <div class="payment-logos">
-                    <img src="images/stripe-logo.png" alt="Stripe" class="payment-logo">
-                    <img src="images/paypal-logo.png" alt="PayPal" class="payment-logo">
-                </div>
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('token-store-modal')">&times;</span>
+        <h2>💎 Buy Ignition Tokens</h2>
+        <p class="store-description">Premium currency for exclusive items and features</p>
+        
+        <div class="current-balance">
+            <div class="balance-display">
+                <span class="token-icon">💎</span>
+                <span id="tokens">${window.gameState?.player?.tokens || 0}</span>
+                <span class="balance-label">Your Tokens</span>
             </div>
         </div>
-    `;
+
+        <div class="token-packages">
+            ${TOKEN_PACKAGES.map(pkg => `
+                <div class="token-package ${pkg.popular ? 'popular' : ''}">
+                    ${pkg.popular ? '<div class="popular-badge">MOST POPULAR</div>' : ''}
+                    <div class="package-header">
+                        <h3>${pkg.name}</h3>
+                        <div class="token-amount">${pkg.tokens} Tokens</div>
+                    </div>
+                    <div class="package-bonus">
+                        ${pkg.bonus > 0 ? `+${pkg.bonus} Bonus Tokens!` : ''}
+                    </div>
+                    <div class="package-price">
+                        $${pkg.price}
+                    </div>
+                    
+                    <!-- Payment Options -->
+                    <div class="payment-options">
+                        <button class="btn-stripe purchase-btn" 
+                                onclick="purchaseWithStripe('${pkg.id}', '${pkg.name}', ${pkg.tokens + pkg.bonus}, ${pkg.price})">
+                            <i class="fab fa-stripe"></i> Buy with Stripe
+                        </button>
+                        <div id="paypal-button-${pkg.id}" class="paypal-button-container"></div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <div class="payment-security">
+            <div class="security-badges">
+                <span>🔒 Secure Payment</span>
+                <span>🛡️ SSL Encrypted</span>
+                <span>💳 Multiple Methods</span>
+            </div>
+            <div class="payment-logos">
+                <img src="images/stripe-logo.png" alt="Stripe" class="payment-logo">
+                <img src="images/paypal-logo.png" alt="PayPal" class="payment-logo">
+            </div>
+        </div>
+    </div>
+`;
 
     modal.style.display = 'block';
     
@@ -11081,88 +11360,6 @@ function addTokenStoreButton() {
     document.querySelector('.navbar-actions').appendChild(tokenButton);
 }
 
-// Cloud Function for Stripe
-exports.createStripeCheckoutSession = functions.https.onRequest(async (req, res) => {
-    corsHandler(req, res, async () => {
-        try {
-            const { packageId, packageName, tokenAmount, price, userId, userEmail } = req.body;
-
-            const session = await stripe.checkout.sessions.create({
-                payment_method_types: ['card'],
-                line_items: [{
-                    price_data: {
-                        currency: 'usd',
-                        product_data: {
-                            name: `${tokenAmount} Ignition Tokens - ${packageName}`,
-                            description: 'Premium game currency'
-                        },
-                        unit_amount: Math.round(price * 100), // Convert to cents
-                    },
-                    quantity: 1,
-                }],
-                mode: 'payment',
-                success_url: `${YOUR_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-                cancel_url: `${YOUR_DOMAIN}/payment-cancel`,
-                customer_email: userEmail,
-                metadata: {
-                    userId: userId,
-                    packageId: packageId,
-                    tokenAmount: tokenAmount
-                }
-            });
-
-            res.json({ id: session.id });
-        } catch (error) {
-            console.error('Stripe Session Error:', error);
-            res.status(500).json({ error: error.message });
-        }
-    });
-});
-
-// Cloud Function for PayPal
-exports.processPayPalPayment = functions.https.onRequest(async (req, res) => {
-    corsHandler(req, res, async () => {
-        try {
-            const { packageId, transactionId, amount, userId, paymentMethod } = req.body;
-
-            // Verify PayPal payment (you'd use PayPal SDK here)
-            const paymentVerified = await verifyPayPalPayment(transactionId, amount);
-            
-            if (!paymentVerified) {
-                throw new Error('Payment verification failed');
-            }
-
-            // Get package and add tokens
-           // const package = TOKEN_PACKAGES.find(p => p.id === packageId); --re-add later
-           // const totalTokens = package.tokens + package.bonus;  --re-add later
-
-            // Update user
-            await admin.firestore().collection('users').doc(userId).update({
-                tokens: admin.firestore.FieldValue.increment(totalTokens),
-                totalSpent: admin.firestore.FieldValue.increment(parseFloat(amount)),
-                lastPurchase: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            // Record transaction
-            await admin.firestore().collection('transactions').doc(transactionId).set({
-                userId: userId,
-                packageId: packageId,
-                tokenAmount: totalTokens,
-                amountPaid: parseFloat(amount),
-                paymentMethod: paymentMethod,
-                status: 'completed',
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            res.json({ success: true, tokensAdded: totalTokens });
-        } catch (error) {
-            console.error('PayPal Processing Error:', error);
-            res.status(500).json({ success: false, error: error.message });
-        }
-    });
-});
-
-
 // Handle successful payments (for redirects)
 function handlePaymentSuccess() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -11174,6 +11371,21 @@ function handlePaymentSuccess() {
     }
 }
 
+document.getElementById('token-store-button').addEventListener('click', function() {
+    console.log("Token store button clicked");
+    showTokenStore();
+});
+
+
+// Check if player just returned from payment
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('payment') === 'success') {
+    // Add tokens to player account
+    addTokensToPlayer(purchasedAmount);
+    alert('Payment successful! Tokens added.');
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+}
 
 
 // ========== GLOBAL FUNCTION EXPORTS ==========
@@ -11195,6 +11407,7 @@ window.currentTeam = null;
 window.teamMembers = [];
 window.teamJoinRequests = [];
 window.currentTeamsTab = 'my-team'; // Default tab
+
 
 if (typeof currentTeam === 'undefined') window.currentTeam = null;
 if (typeof teamMembers === 'undefined') window.teamMembers = [];

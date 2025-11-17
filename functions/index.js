@@ -1,46 +1,50 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const stripe = require('stripe')('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');
+
 admin.initializeApp();
 
-// Clean up expired challenges every 5 minutes
-exports.cleanupExpiredChallenges = functions.pubsub
-  .schedule('every 5 minutes')
-  .onRun(async (context) => {
-    const now = admin.firestore.Timestamp.now();
-    const db = admin.firestore();
+// Only deploy the Stripe function for now
+exports.createStripeCheckout = functions.https.onRequest(async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+
+  try {
+    const { packageId, packageName, tokenAmount, price, userId } = req.body;
     
-    try {
-      console.log('🔄 Running challenge cleanup...');
-      
-      // Find expired pending challenges
-      const challengesRef = db.collection('challenges');
-      const expiredQuery = challengesRef
-        .where('status', '==', 'pending')
-        .where('expiresAt', '<=', now);
-      
-      const snapshot = await expiredQuery.get();
-      
-      let cleanupCount = 0;
-      const batch = db.batch();
-      
-      snapshot.forEach(doc => {
-        batch.update(doc.ref, {
-          status: 'expired',
-          expiredAt: now
-        });
-        cleanupCount++;
-      });
-      
-      if (cleanupCount > 0) {
-        await batch.commit();
-        console.log(`✅ Cleaned up ${cleanupCount} expired challenges`);
-      } else {
-        console.log('✅ No expired challenges found');
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('❌ Error in challenge cleanup:', error);
-      return null;
-    }
-  });
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          product_data: { 
+            name: `${packageName} - ${tokenAmount} Tokens` 
+          },
+          unit_amount: Math.round(price * 100),
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: 'https://majestosomiau.github.io/IgnitionShift2/public/index.html?payment=success',
+      cancel_url: 'https://majestosomiau.github.io/IgnitionShift2/public/index.html?payment=cancel',
+      metadata: { userId, packageId },
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Stripe error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});

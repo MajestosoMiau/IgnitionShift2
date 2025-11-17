@@ -4,9 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ignition Shift - Home</title>
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.paypal.com/sdk/js?client-id=YOUR_PAYPAL_CLIENT_ID&currency=USD"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline';">
 </head>
 <body>
     <!-- Navigation -->
@@ -166,9 +175,29 @@
                         <span id="tokens">0</span>
                     </div>
                     
-                    <button onclick="logout()" class="logout-btn-compact">Logout</button>
-                </div>
+
+                      <button class="btn-primary token-store-btn" id="token-store-button">
+        💎 Buy Tokens
+    </button>
+                      </div>
             </div>          
+
+
+<!-- Token Store Modal -->
+<div id="token-store-modal" class="modal">
+    <div class="modal-content token-store">
+        <div class="modal-header">
+            <h2>🚀 Ignition Token Store</h2>
+            <button class="close-btn" id="close-token-store">×</button>
+        </div>
+        
+        <div class="token-packages">
+            <div class="package-grid" id="package-grid">
+                <!-- Packages dynamically loaded -->
+            </div>
+        </div>
+    </div>
+</div>
 
             <!-- Main Dashboard Grid -->
             <div class="dashboard-container">
@@ -267,11 +296,11 @@
                         </div>
                         <div class="stat-item">
                             <span>💰 Gold:</span>
-                            <span id="gold">0</span>
+                            <span id="stats-gold">0</span>
                         </div>
                         <div class="stat-item">
                             <span>💎 Tokens:</span>
-                            <span id="tokens">0</span>
+                            <span id="stats-tokens">0</span>
                         </div>
                         <div class="stat-item">
                             <span>🏆 Fame:</span>
@@ -376,6 +405,7 @@
         </div>
     </div>
 
-    <script type="module" src="frontend.js"></script>
+    <script type="module" src="frontend.js"></script>    
+    <script src="https://js.stripe.com/v3/"></script>
 </body>
 </html>
