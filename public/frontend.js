@@ -11387,6 +11387,23 @@ if (urlParams.get('payment') === 'success') {
     window.history.replaceState({}, '', window.location.pathname);
 }
 
+// Listen for token updates in real-time
+function monitorTokens() {
+  const user = firebase.auth().currentUser;
+  if (user) {
+    db.collection('users').doc(user.uid).onSnapshot((doc) => {
+      const data = doc.data();
+      console.log('🔄 Token balance updated:', data?.tokens);
+      if (data?.tokens !== undefined) {
+        updateUITokens(data.tokens);
+      }
+    });
+  }
+}
+
+// Call this after page load
+monitorTokens();
+
 
 // ========== GLOBAL FUNCTION EXPORTS ==========
 window.loadPlayerData = loadPlayerData;
