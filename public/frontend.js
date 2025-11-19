@@ -360,6 +360,213 @@ async function loadPlayerData(userId) {
     }
 }
 
+// ========== COMPLETE CUSTOM MODAL SYSTEM ==========
+// ========== FIXED CUSTOM MODAL SYSTEM ==========
+window.customModalSystem = {
+    currentResolve: null,
+    isInitialized: false,
+    
+    init: function() {
+        if (this.isInitialized) return;
+        
+        console.log('🔄 Initializing fixed custom modal system...');
+        
+        // Remove any existing modal to avoid duplicates
+        const existingModal = document.getElementById('activityModal');
+        if (existingModal) existingModal.remove();
+        
+        // Create modal structure
+        const modalHTML = `
+            <div id="activityModal" class="activity-modal-overlay" style="display: none;">
+                <div class="activity-modal">
+                    <div class="activity-modal-content">
+                        <div id="activityTitle" class="activity-title" style="display: none;"></div>
+                        <div id="activityIcon" class="activity-icon"></div>
+                        <div id="activityMessage" class="activity-message"></div>
+                        <div id="activityDetails" class="activity-details" style="display: none;"></div>
+                        <div id="activityStats" class="activity-stats" style="display: none;"></div>
+                        <div id="activityActions" class="activity-actions"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Add event listeners
+        const modal = document.getElementById('activityModal');
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.hide(false);
+            }
+        });
+        
+        // Define global functions
+        window.showCustomModal = this.show.bind(this);
+        window.showCustomConfirm = this.confirm.bind(this);
+        window.hideCustomModal = this.hide.bind(this);
+        
+        this.isInitialized = true;
+        console.log('✅ Fixed custom modal system ready');
+    },
+    
+    show: function(type, message, details = '', stats = {}, customActions = '', title = '') {
+        // Ensure initialization
+        if (!this.isInitialized) this.init();
+        
+        return new Promise((resolve) => {
+            const modal = document.getElementById('activityModal');
+            if (!modal) {
+                console.error('❌ Modal not found');
+                resolve(false);
+                return;
+            }
+
+            // Set modal content
+            const icon = document.getElementById('activityIcon');
+            const messageEl = document.getElementById('activityMessage');
+            const detailsEl = document.getElementById('activityDetails');
+            const statsEl = document.getElementById('activityStats');
+            const actionsEl = document.getElementById('activityActions');
+            const titleEl = document.getElementById('activityTitle');
+            const modalContent = modal.querySelector('.activity-modal');
+
+            // Reset and set modal type
+            modalContent.className = 'activity-modal';
+            modalContent.classList.add(type);
+            
+            // Set icon
+            const icons = {
+                training: '⚡', pvp: '🏆', rest: '😴', challenge: '🎯', reward: '🎁',
+                error: '❌', success: '✅', upgrade: '📈', purchase: '🛒', 
+                levelup: '🎉', info: 'ℹ️', warning: '⚠️'
+            };
+            if (icon) icon.textContent = icons[type] || '🚗';
+            
+            // Set message
+            if (messageEl) messageEl.textContent = message;
+            
+            // Set title
+            if (titleEl) {
+                if (title) {
+                    titleEl.textContent = title;
+                    titleEl.style.display = 'block';
+                } else {
+                    titleEl.style.display = 'none';
+                }
+            }
+            
+            // Set details
+            if (detailsEl) {
+                if (details) {
+                    detailsEl.innerHTML = details;
+                    detailsEl.style.display = 'block';
+                } else {
+                    detailsEl.style.display = 'none';
+                }
+            }
+            
+            // Set stats
+            if (statsEl) {
+                if (stats && Object.keys(stats).length > 0) {
+                    statsEl.innerHTML = Object.entries(stats).map(([label, value]) => `
+                        <div class="activity-stat">
+                            <span class="stat-value">${value}</span>
+                            <span class="stat-label">${label}</span>
+                        </div>
+                    `).join('');
+                    statsEl.style.display = 'flex';
+                } else {
+                    statsEl.style.display = 'none';
+                }
+            }
+            
+            // Set actions
+            if (actionsEl) {
+                if (customActions) {
+                    actionsEl.innerHTML = customActions;
+                } else {
+                    actionsEl.innerHTML = '<button class="activity-btn primary" onclick="window.hideCustomModal(true)">Continue</button>';
+                }
+            }
+            
+            // Store resolve function
+            this.currentResolve = resolve;
+            
+            // Show modal
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            
+            console.log(`✅ Modal shown: ${type} - ${message}`);
+        });
+    },
+    
+    confirm: function(message, title = 'Confirmation') {
+        return this.show('info', message, '', {}, `
+            <button class="activity-btn primary" onclick="window.hideCustomModal(true)">Yes</button>
+            <button class="activity-btn secondary" onclick="window.hideCustomModal(false)">No</button>
+        `, title);
+    },
+    
+    hide: function(result = true) {
+        console.log(`🔒 Hiding modal with result: ${result}`);
+        
+        const modal = document.getElementById('activityModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        if (this.currentResolve) {
+            this.currentResolve(result);
+            this.currentResolve = null;
+        }
+    }
+};
+
+// Initialize immediately
+window.customModalSystem.init();
+
+// Override the problematic global functions
+window.hideCustomModal = window.customModalSystem.hide.bind(window.customModalSystem);
+window.showCustomConfirm = window.customModalSystem.confirm.bind(window.customModalSystem);
+window.showCustomModal = window.customModalSystem.show.bind(window.customModalSystem);
+
+// Test functions
+window.testModal = function() {
+    console.log('🧪 Testing fixed modal system...');
+    window.showCustomModal('success', 
+        'Fixed Modal System Working!', 
+        'The modal system should now work properly with shop and upgrades.',
+        {
+            'Feature': '✅ Working',
+            'Shop': '✅ Fixed', 
+            'Upgrades': '✅ Fixed'
+        }
+    );
+};
+
+window.testConfirm = function() {
+    window.showCustomConfirm('Does this confirmation work correctly?', 'Test Confirmation')
+        .then(result => {
+            window.showCustomModal('info', `You clicked: ${result ? 'Yes' : 'No'}`);
+        });
+};
+
+console.log('✅ Fixed custom modal system loaded');
+console.log('🎮 Test commands: testModal(), testConfirm()');
+
+// Close modal when clicking outside
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('activityModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideCustomModal(false);
+            }
+        });
+    }
+});
+
 // Player data functions
 // ========== CREATE NEW PLAYER DATA ==========
 async function createNewPlayer(uid, email) {
@@ -609,36 +816,15 @@ async function checkLevelUp(userId, currentXP, currentLevel) {
 }
 
 function showLevelUpNotification(newLevel) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #00ff88, #00ffff);
-        color: #1a1a2e;
-        padding: 2rem 3rem;
-        border-radius: 15px;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 700;
-        font-size: 1.5rem;
-        text-align: center;
-        z-index: 10000;
-        box-shadow: 0 0 50px rgba(0, 255, 255, 0.5);
-        animation: levelUpPop 0.5s ease-out;
-    `;
-    
-    notification.innerHTML = `
-        <div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
-        <div>LEVEL UP!</div>
-        <div style="font-size: 2rem; margin-top: 0.5rem;">Level ${newLevel}</div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
+    window.showCustomModal('levelup',
+        '🎉 LEVEL UP!',
+        `Congratulations! You've reached <strong>Level ${newLevel}</strong>!`,
+        {
+            'New Level': newLevel,
+            'New Perks': 'Unlocked!',
+            'Keep Going': '→'
+        }
+    );
 }
 
 async function addXP(userId, xpAmount) {
@@ -1648,7 +1834,7 @@ function getEquippedCar(inventory) {
 window.buyItem = async function(category, itemId, itemName, priceGold, priceTokens = 0) {
     const user = auth.currentUser;
     if (!user) {
-        alert('Please log in to make purchases.');
+        window.showCustomModal('error', 'Please log in to make purchases.');
         return;
     }
 
@@ -1660,12 +1846,26 @@ window.buyItem = async function(category, itemId, itemName, priceGold, priceToke
             const userData = userSnap.data();
             
             if (userData.gold < priceGold) {
-                alert(`Not enough gold! You need ${priceGold} gold but only have ${userData.gold}.`);
+                window.showCustomModal('error', 
+                    'Not enough gold!', 
+                    `You need ${priceGold} gold but only have ${userData.gold}.`,
+                    {
+                        'Required': `${priceGold} gold`,
+                        'You Have': `${userData.gold} gold`
+                    }
+                );
                 return;
             }
             
             if (userData.tokens < priceTokens) {
-                alert(`Not enough Ignition Tokens! You need ${priceTokens} tokens but only have ${userData.tokens}.`);
+                window.showCustomModal('error',
+                    'Not enough Ignition Tokens!',
+                    `You need ${priceTokens} tokens but only have ${userData.tokens}.`,
+                    {
+                        'Required': `${priceTokens} tokens`,
+                        'You Have': `${userData.tokens} tokens`
+                    }
+                );
                 return;
             }
             
@@ -1673,15 +1873,27 @@ window.buyItem = async function(category, itemId, itemName, priceGold, priceToke
             const itemData = itemDoc.data();
             
             if (itemData.minimumRequiredLevel && userData.level < itemData.minimumRequiredLevel) {
-                alert(`Level ${itemData.minimumRequiredLevel} required! You are level ${userData.level}.`);
+                window.showCustomModal('warning',
+                    'Level Requirement Not Met!',
+                    `Level ${itemData.minimumRequiredLevel} required! You are level ${userData.level}.`,
+                    {
+                        'Required Level': itemData.minimumRequiredLevel,
+                        'Your Level': userData.level
+                    }
+                );
                 return;
             }
             
             let currencyMessage = `${priceGold} gold`;
             if (priceTokens > 0) currencyMessage += ` and ${priceTokens} Ignition Tokens`;
             
-            if (!confirm(`Purchase ${itemName} for ${currencyMessage}?`)) return;
+            const confirmed = await window.showCustomConfirm(
+                `Purchase ${itemName} for ${currencyMessage}?`,
+                'Confirm Purchase'
+            );
             
+            if (!confirmed) return;
+
             const itemStats = {
                 power: itemData.power || 0,
                 speed: itemData.speed || 0,
@@ -1725,17 +1937,43 @@ window.buyItem = async function(category, itemId, itemName, priceGold, priceToke
             if (priceTokens > 0) updateData.tokens = userData.tokens - priceTokens;
             
             await updateDoc(userRef, updateData);
-            alert(`🎉 Successfully purchased and equipped ${itemName} for ${currencyMessage}!`);
+            
+            // Show success modal
+            let statsText = '';
+            const statEntries = Object.entries(itemStats).filter(([_, value]) => value > 0);
+            if (statEntries.length > 0) {
+                statsText = statEntries.map(([stat, value]) => `+${value} ${stat}`).join(', ');
+            }
+            
+            window.showCustomModal('purchase',
+                `🎉 Successfully Purchased!`,
+                `${itemName} has been purchased and equipped.${statsText ? `<br><br><strong>Bonuses:</strong> ${statsText}` : ''}`,
+                {
+                    'Item': itemName,
+                    'Gold Spent': `-${priceGold}`,
+                    'Tokens Spent': priceTokens > 0 ? `-${priceTokens}` : '0',
+                    'Gold Left': `${userData.gold - priceGold}`,
+                    'Rarity': itemData.rarity || 'Common'
+                }
+            );
+            
             await loadPlayerData(user.uid);
-            // Add this after successful purchase
-window.trackItemPurchase();
+            if (window.trackItemPurchase) {
+                window.trackItemPurchase();
+            }
         }
     } catch (error) {
-        alert('Error making purchase: ' + error.message);
+        console.error('❌ Error making purchase:', error);
+        window.showCustomModal('error', 
+            'Purchase Failed', 
+            `There was an error purchasing ${itemName}.`,
+            {
+                'Error': error.message,
+                'Item': itemName
+            }
+        );
     }
-
-    
-}
+};
 
 // Add this comprehensive challenge-only items list
 const CHALLENGE_ONLY_ITEMS = [
@@ -2047,7 +2285,7 @@ function updateActiveTab(activeButton) {
 window.sellItem = async function(category, itemId, itemName, sellPrice) {
     const user = auth.currentUser;
     if (!user) {
-        alert('Please log in to sell items.');
+        window.showCustomModal('error', 'Please log in to sell items.');
         return;
     }
 
@@ -2062,34 +2300,45 @@ window.sellItem = async function(category, itemId, itemName, sellPrice) {
             const itemToSell = inventory.find(item => item.id === itemId && item.type === itemType);
             
             if (!itemToSell) {
-                alert(`You don't own ${itemName} to sell!`);
+                window.showCustomModal('error', 'Item not found!', `You don't own ${itemName} to sell!`);
                 return;
             }
             
             if (itemToSell.equipped) {
-                alert(`You cannot sell ${itemName} because it's currently equipped! Unequip it first.`);
+                window.showCustomModal('warning',
+                    'Cannot Sell Equipped Item!',
+                    `You cannot sell ${itemName} because it's currently equipped! Unequip it first.`
+                );
                 return;
             }
             
-            if (!confirm(`Sell ${itemName} for ${sellPrice} gold?`)) return;
+            const confirmed = await window.showCustomConfirm(`Sell ${itemName} for ${sellPrice} gold?`, 'Confirm Sale');
+            
+            if (!confirmed) return;
             
             const updatedInventory = inventory.filter(item => !(item.id === itemId && item.type === itemType));
-            await updateDoc(userRef, { gold: (userData.gold || 0) + sellPrice, inventory: updatedInventory });
-            alert(`💰 Sold ${itemName} for ${sellPrice} gold!`);
-            await loadPlayerData(user.uid);
+            await updateDoc(userRef, { 
+                gold: (userData.gold || 0) + sellPrice, 
+                inventory: updatedInventory 
+            });
             
-            if (document.getElementById('items-list')) {
-                const activeButton = document.querySelector('.category-btn.active');
-                if (activeButton) {
-                    const category = activeButton.getAttribute('onclick').match(/'([^']+)'/)[1];
-                    showCategory(category, activeButton);
+            window.showCustomModal('purchase',
+                `💰 Item Sold!`,
+                `You sold <strong>${itemName}</strong> for ${sellPrice} gold.`,
+                {
+                    'Item Sold': itemName,
+                    'Gold Received': `+${sellPrice}`,
+                    'New Balance': `${userData.gold + sellPrice} gold`
                 }
-            }
+            );
+            
+            await loadPlayerData(user.uid);
         }
     } catch (error) {
-        alert('Error selling item: ' + error.message);
+        console.error('❌ Error selling item:', error);
+        window.showCustomModal('error', 'Sale Failed', `Error selling ${itemName}: ${error.message}`);
     }
-}
+};
 
 function initializeShop() {
     const itemsList = document.getElementById('items-list');
@@ -2619,22 +2868,34 @@ function simulateTraining(track, userData) {
 
 function showTrainingResults(track, completionTime, reward) {
     let medal = '🥉 Bronze';
-    if (completionTime <= (track.timeRequirements?.gold || 0)) medal = '🏅 Gold';
-    else if (completionTime <= (track.timeRequirements?.silver || 0)) medal = '🥈 Silver';
+    let medalColor = 'bronze';
     
-    alert(`🎉 Training Complete!
-Track: ${track.name || 'Unknown Track'}
-Time: ${formatTime(completionTime)}
-Medal: ${medal}
-
-Rewards:
-💰 +${reward.gold} Gold
-⭐ +${reward.xp} XP
-🏆 +${reward.fame} Fame
-❤️ -${track.conditionCost || 0} Condition
-
-Cooldown: ${formatCooldown(track.cooldown || 0)}`);
-window.trackTrainingComplete();
+    if (completionTime <= (track.timeRequirements?.gold || 0)) {
+        medal = '🏅 Gold';
+        medalColor = 'gold';
+    } else if (completionTime <= (track.timeRequirements?.silver || 0)) {
+        medal = '🥈 Silver';
+        medalColor = 'silver';
+    }
+    
+    const stats = {
+        'Time': formatTime(completionTime),
+        'Medal': medal,
+        'Gold Earned': `+${reward.gold}`,
+        'XP Gained': `+${reward.xp}`,
+        'Fame Earned': `+${reward.fame}`,
+        'Condition Used': `-${track.conditionCost || 0}%`
+    };
+    
+    window.showCustomModal('training',
+        '🎉 Training Complete!',
+        `You completed <strong>${track.name || 'Unknown Track'}</strong> with an impressive time!`,
+        stats
+    );
+    
+    if (window.trackTrainingComplete) {
+        window.trackTrainingComplete();
+    }
 }
 
 async function loadTrainingHistory() {
@@ -2704,10 +2965,36 @@ function calculateUpgradeCost(statLevel) {
     return baseCost + costIncrease;
 }
 
+function initializeGarage() {
+    console.log('🔧 Initializing garage functions...');
+    
+    const upgradeButtons = document.querySelectorAll('.upgrade-btn');
+    if (upgradeButtons.length > 0) {
+        const observer = new MutationObserver(() => updateUpgradeButtons());
+        const statsContainer = document.getElementById('stats-container');
+        if (statsContainer) observer.observe(statsContainer, { childList: true, subtree: true });
+    }
+    
+    // Test if garage functions are working
+    setTimeout(() => {
+        console.log('🧪 Testing garage buttons...');
+        const buttons = document.querySelectorAll('.upgrade-btn');
+        console.log(`Found ${buttons.length} upgrade buttons`);
+        
+        // Add click listeners for testing
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                console.log('🎯 Upgrade button clicked:', this.getAttribute('onclick'));
+            });
+        });
+    }, 1000);
+}
+
+// Enhanced upgrade function with better debugging
 window.upgradeStat = async function(statName) {
     const user = auth.currentUser;
     if (!user) {
-        alert('Please log in to upgrade stats.');
+        window.showCustomModal('error', 'Please log in to upgrade stats.');
         return;
     }
 
@@ -2722,33 +3009,59 @@ window.upgradeStat = async function(statName) {
             const upgradeCost = calculateUpgradeCost(currentLevel);
             
             if (userData.gold < upgradeCost) {
-                alert(`Not enough gold! You need ${upgradeCost} gold but only have ${userData.gold}.`);
+                window.showCustomModal('error', 
+                    'Not enough gold!', 
+                    `You need ${upgradeCost} gold but only have ${userData.gold}.`,
+                    {
+                        'Required': `${upgradeCost} gold`,
+                        'You Have': `${userData.gold} gold`,
+                        'Missing': `${upgradeCost - userData.gold} gold`
+                    }
+                );
                 return;
             }
             
-            if (!confirm(`Upgrade ${statName.toUpperCase()} from ${currentLevel} to ${currentLevel + 1} for ${upgradeCost} gold?`)) return;
+            const confirmed = await window.showCustomConfirm(
+                `Upgrade ${statName.toUpperCase()} from level ${currentLevel} to ${currentLevel + 1} for ${upgradeCost} gold?`,
+                'Upgrade Stat'
+            );
+            
+            if (!confirmed) return;
             
             const updatedStats = { ...currentStats, [statName]: currentLevel + 1 };
-            await updateDoc(userRef, { gold: userData.gold - upgradeCost, stats: updatedStats });
-            alert(`✅ ${statName.toUpperCase()} upgraded to level ${currentLevel + 1} for ${upgradeCost} gold!`);
+            await updateDoc(userRef, { 
+                gold: userData.gold - upgradeCost, 
+                stats: updatedStats 
+            });
+            
+            window.showCustomModal('upgrade', 
+                `✅ ${statName.toUpperCase()} Upgraded!`, 
+                `Your ${statName} is now level ${currentLevel + 1}`,
+                {
+                    'New Level': currentLevel + 1,
+                    'Cost': `${upgradeCost} gold`,
+                    'Gold Left': `${userData.gold - upgradeCost} gold`,
+                    'Improvement': `+1 ${statName}`
+                }
+            );
+            
             await loadPlayerData(user.uid);
-            window.trackStatUpgrade();
+            if (window.trackStatUpgrade) {
+                window.trackStatUpgrade();
+            }
         }
     } catch (error) {
-        alert('Error upgrading stat: ' + error.message);
+        console.error('❌ Error upgrading stat:', error);
+        window.showCustomModal('error', 
+            'Upgrade Failed', 
+            `There was an error upgrading your ${statName}.`,
+            {
+                'Error': error.message,
+                'Stat': statName
+            }
+        );
     }
-
-    
-}
-
-function initializeGarage() {
-    const upgradeButtons = document.querySelectorAll('.upgrade-btn');
-    if (upgradeButtons.length > 0) {
-        const observer = new MutationObserver(() => updateUpgradeButtons());
-        const statsContainer = document.getElementById('stats-container');
-        if (statsContainer) observer.observe(statsContainer, { childList: true, subtree: true });
-    }
-}
+};
 
 function updateUpgradeButtons() {
     const user = auth.currentUser;
@@ -4240,53 +4553,63 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// FIXED: Enhanced race time calculation with BETTER level difference handling
-function calculateEnhancedRaceTime(playerData, track, levelDifference, opponentLevel) {
-    const stats = playerData.stats || {};
-    const equipment = calculateTotalStats(stats, playerData.inventory);
+// ========== FIXED RACE TIME CALCULATION ==========
+function calculateEnhancedRaceTime(playerData, track, levelDifference = 0, opponentLevel = 1) {
+    const baseTime = track?.baseTime || 60;
     
-    // MUCH LONGER base times
-    const trackBaseTimes = {
-        'easy': 180,      // 3 minutes base
-        'medium': 240,    // 4 minutes base  
-        'hard': 300       // 5 minutes base
-    };
+    // Level factor - significant impact
+    const levelFactor = 1 + (levelDifference * 0.15); // 15% per level difference
     
-    const trackDifficulty = track?.difficulty || 'medium';
-    let baseTime = trackBaseTimes[trackDifficulty] || 240;
+    // All player stats factors
+    const powerFactor = 1 - (Math.min(playerData.stats?.power || 1, 100) * 0.003); // Up to 30% reduction
+    const speedFactor = 1 - (Math.min(playerData.stats?.speed || 1, 100) * 0.004); // Up to 40% reduction
+    const dexterityFactor = 1 - (Math.min(playerData.stats?.dexterity || 1, 100) * 0.002); // Up to 20% reduction
+    const handlingFactor = 1 - (Math.min(playerData.stats?.handling || 1, 100) * 0.0025); // Up to 25% reduction
+    const structureFactor = 1 - (Math.min(playerData.stats?.structure || 1, 100) * 0.0015); // Up to 15% reduction
+    const luckFactor = 1 - (Math.min(playerData.stats?.luck || 1, 100) * 0.001); // Up to 10% reduction + random boost
     
-    // Apply track distance multiplier
-    const trackDistance = track?.distance || 5;
-    baseTime *= (trackDistance / 5);
+    // All equipment bonuses
+    const carBonus = (playerData.equippedCar?.performance || 1) * 0.15;
+    const tireBonus = (playerData.equippedTires?.grip || 1) * 0.1;
+    const engineBonus = (playerData.equippedEngine?.power || 1) * 0.12;
+    const seatBonus = (playerData.equippedSeat?.comfort || 1) * 0.08;
+    const suspensionBonus = (playerData.equippedSuspension?.stability || 1) * 0.09;
+    const turboBonus = (playerData.equippedTurbo?.boost || 1) * 0.11;
     
-    const statModifiers = {
-        speed: 0.03,
-        handling: 0.025,
-        power: 0.02,
-        dexterity: 0.015,
-        luck: 0.008
-    };
+    // Luck-based random variance
+    const luckMultiplier = 1 + ((playerData.stats?.luck || 1) * 0.0005); // Luck helps consistency
+    const randomVariance = (0.8 + (Math.random() * 0.4)) * luckMultiplier; // ±20% variance adjusted by luck
     
-    let timeModifier = 1.0;
+    // Calculate final time with all factors
+    let finalTime = baseTime * levelFactor * 
+                   powerFactor * speedFactor * dexterityFactor * 
+                   handlingFactor * structureFactor * luckFactor;
     
-    Object.entries(statModifiers).forEach(([stat, modifier]) => {
-        const statValue = equipment.total[stat] || 0;
-        timeModifier -= Math.min(0.4, statValue * modifier);
+    // Apply all equipment bonuses
+    const totalEquipmentBonus = carBonus + tireBonus + engineBonus + seatBonus + suspensionBonus + turboBonus;
+    finalTime *= (1 - Math.min(totalEquipmentBonus, 0.5)); // Max 50% equipment bonus
+    
+    // Apply random variance
+    finalTime *= randomVariance;
+    
+    // Ensure minimum time
+    finalTime = Math.max(finalTime, baseTime * 0.4);
+    
+    console.log('🔧 Complete Race Time Calculation:', {
+        baseTime,
+        levelFactor: levelFactor.toFixed(3),
+        power: powerFactor.toFixed(3),
+        speed: speedFactor.toFixed(3),
+        dexterity: dexterityFactor.toFixed(3),
+        handling: handlingFactor.toFixed(3),
+        structure: structureFactor.toFixed(3),
+        luck: luckFactor.toFixed(3),
+        equipmentBonus: totalEquipmentBonus.toFixed(3),
+        randomVariance: randomVariance.toFixed(3),
+        finalTime: finalTime.toFixed(2)
     });
     
-    const levelEffect = calculateLevelEffect(levelDifference, opponentLevel);
-    timeModifier *= (1 + levelEffect);
-    
-    const itemEffect = calculateItemEffects(playerData.inventory);
-    timeModifier *= (1 + itemEffect);
-    
-    const randomVariation = 0.95 + (Math.random() * 0.1);
-    timeModifier *= randomVariation;
-    
-    const minTimes = { 'easy': 120, 'medium': 160, 'hard': 200 };
-    const minTime = minTimes[trackDifficulty] || 160;
-    
-    return Math.max(minTime, baseTime * timeModifier);
+    return Number(finalTime.toFixed(2));
 }
 
 
@@ -4446,91 +4769,175 @@ function calculateWealthFactor(winnerGold, loserGold, betAmount) {
     return 1.0;
 }
 
-// Challenge another player to a race
+// ENHANCED: Challenge another player to a race with custom modals
 window.challengePlayer = async function(playerId, playerName, playerLevel) {
     const user = auth.currentUser;
-    if (!user) return;
-
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    const userData = userDoc.data();
-    const currentPlayerLevel = userData.level || 1;
-    const playerGold = userData.gold || 0;
-    const playerFame = userData.fame || 0;
-    
-    const levelDiff = Math.abs(currentPlayerLevel - playerLevel);
-    const maxAllowedDiff = 15;
-    
-    let opponentGold = 0;
-    try {
-        const opponentDoc = await getDoc(doc(db, "users", playerId));
-        if (opponentDoc.exists()) {
-            opponentGold = opponentDoc.data().gold || 0;
-        }
-    } catch (error) {
-        console.log('Could not fetch opponent gold data');
-    }
-    
-    if (levelDiff > maxAllowedDiff) {
-        if (currentPlayerLevel < playerLevel) {
-            if (!confirm(`⚠️ ${playerName} is ${levelDiff} levels higher than you!\n\nThis is a HIGH RISK race!\n• You might lose MORE gold if you lose\n• But win BIG if you win!\n\nContinue?`)) {
-                return;
-            }
-        } else {
-            if (!confirm(`⚠️ ${playerName} is ${levelDiff} levels lower than you!\n\nThis race has REDUCED REWARDS:\n• You win less gold if you win\n• But still risk your bet amount\n\nContinue?`)) {
-                return;
-            }
-        }
-    }
-    
-    if (userData.condition < 15) {
-        alert("You need at least 15% condition to challenge other players!");
+    if (!user) {
+        window.showCustomModal('error', 'Login Required', 'Please log in to challenge other players.');
         return;
     }
 
-    const betAmount = calculateEnhancedBetAmount(playerGold, currentPlayerLevel, playerLevel, playerFame);
-    
-    const betMessage = `Challenge ${playerName} to a race?\n\n` +
-        `💰 BET: ${betAmount} gold\n` +
-        `❤️ CONDITION COST: 15%\n` +
-        `📊 LEVEL DIFFERENCE: ${levelDiff}\n` +
-        `🎯 POTENTIAL WIN: ${Math.floor(betAmount * 2.5)} gold\n` +
-        `⚠️ POTENTIAL LOSS: ${betAmount} gold\n\n` +
-        `Accept this challenge?`;
-    
-    if (confirm(betMessage)) {
+    try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        const currentPlayerLevel = userData.level || 1;
+        const playerGold = userData.gold || 0;
+        const playerFame = userData.fame || 0;
+        
+        const levelDiff = Math.abs(currentPlayerLevel - playerLevel);
+        const maxAllowedDiff = 15;
+        
+        let opponentGold = 0;
         try {
-            const challengeRef = await addDoc(collection(db, "challenges"), {
-                challengerId: user.uid,
-                challengerName: userData.username,
-                challengerLevel: currentPlayerLevel,
-                challengerGold: playerGold,
-                targetId: playerId,
-                targetName: playerName,
-                targetLevel: playerLevel,
-                targetGold: opponentGold,
-                status: 'pending',
-                createdAt: serverTimestamp(),
-                conditionCost: 15,
-                betAmount: betAmount,
-                track: getRandomTrack(),
-                levelDifference: levelDiff,
-                expiresAt: new Date(Date.now() + 30 * 60000)
-            });
-
-            alert(`🎯 Challenge sent to ${playerName}!\n\nBet: ${betAmount} gold\nThey have 30 minutes to accept.`);
-            
+            const opponentDoc = await getDoc(doc(db, "users", playerId));
+            if (opponentDoc.exists()) {
+                opponentGold = opponentDoc.data().gold || 0;
+            }
         } catch (error) {
-            alert('Error sending challenge: ' + error.message);
+            console.log('Could not fetch opponent gold data');
         }
-    }
+        
+        // Check condition first
+        if (userData.condition < 15) {
+            window.showCustomModal('error', 
+                'Low Condition', 
+                'You need at least 15% condition to challenge other players!',
+                {
+                    'Your Condition': `${userData.condition}%`,
+                    'Required': '15%',
+                    'Missing': `${15 - userData.condition}%`
+                }
+            );
+            return;
+        }
 
-    console.log('🎯 Challenge sent - target will see notification');
+        // Handle large level differences with custom modals
+        if (levelDiff > maxAllowedDiff) {
+            if (currentPlayerLevel < playerLevel) {
+                const proceed = await window.showCustomConfirm(
+                    `⚠️ ${playerName} is ${levelDiff} levels higher than you!\n\n` +
+                    `• HIGH RISK RACE\n` +
+                    `• You might lose MORE gold if you lose\n` +
+                    `• But win BIG if you win!\n\n` +
+                    `Are you feeling brave enough to continue?`,
+                    'High Risk Challenge'
+                );
+                if (!proceed) return;
+            } else {
+                const proceed = await window.showCustomConfirm(
+                    `⚠️ ${playerName} is ${levelDiff} levels lower than you!\n\n` +
+                    `• REDUCED REWARDS\n` +
+                    `• You win less gold if you win\n` +
+                    `• But still risk your full bet amount\n\n` +
+                    `Do you want to proceed?`,
+                    'Reduced Rewards Challenge'
+                );
+                if (!proceed) return;
+            }
+        }
+
+        const betAmount = calculateEnhancedBetAmount(playerGold, currentPlayerLevel, playerLevel, playerFame);
+        const potentialWin = Math.floor(betAmount * 2.5);
+        
+        // Show beautiful challenge confirmation modal
+        const challengeStats = getChallengeStats(playerName, currentPlayerLevel, playerLevel, betAmount, potentialWin);
+
+        const confirmed = await window.showCustomModal('challenge',
+            `🏁 Challenge ${playerName}?`,
+            `Ready to race against ${playerName}? This challenge will expire in 30 minutes if not accepted.`,
+            challengeStats,
+            `
+                <button class="activity-btn primary" onclick="window.hideCustomModal(true)">
+                    🎯 Send Challenge
+                </button>
+                <button class="activity-btn secondary" onclick="window.hideCustomModal(false)">
+                    Cancel
+                </button>
+            `,
+            'PVP Challenge'
+        );
+
+        if (!confirmed) {
+            console.log('❌ Challenge cancelled by user');
+            return;
+        }
+
+        // Create the challenge
+        const challengeRef = await addDoc(collection(db, "challenges"), {
+            challengerId: user.uid,
+            challengerName: userData.username || user.email.split('@')[0],
+            challengerLevel: currentPlayerLevel,
+            challengerGold: playerGold,
+            targetId: playerId,
+            targetName: playerName,
+            targetLevel: playerLevel,
+            targetGold: opponentGold,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            conditionCost: 15,
+            betAmount: betAmount,
+            track: getRandomTrack(),
+            levelDifference: levelDiff,
+            expiresAt: new Date(Date.now() + 30 * 60000)
+        });
+
+        // Show success modal
+        window.showCustomModal('success',
+            '🎯 Challenge Sent!',
+            `Your challenge has been sent to <strong>${playerName}</strong>!`,
+            {
+                'Bet Amount': `${betAmount} gold`,
+                'Expires In': '30 minutes',
+                'Potential Win': `${potentialWin} gold`,
+                'Challenge ID': challengeRef.id.substring(0, 8) + '...'
+            },
+            '<button class="activity-btn primary" onclick="window.hideCustomModal()">Awesome!</button>',
+            'Challenge Created'
+        );
+
+        console.log('🎯 Challenge sent successfully - ID:', challengeRef.id);
+
+    } catch (error) {
+        console.error('❌ Error sending challenge:', error);
+        
+        window.showCustomModal('error',
+            'Challenge Failed',
+            `There was an error sending the challenge to ${playerName}.`,
+            {
+                'Error': error.message,
+                'Opponent': playerName,
+                'Action': 'Please try again later'
+            }
+        );
+    }
 };
+
+function getChallengeStats(playerName, currentLevel, opponentLevel, betAmount, potentialWin) {
+    const levelDiff = Math.abs(currentLevel - opponentLevel);
+    let riskLevel = '🟢 Balanced';
+    
+    if (levelDiff > 10) {
+        riskLevel = currentLevel < opponentLevel ? '🔴 High Risk' : '🟡 Reduced Rewards';
+    } else if (levelDiff > 5) {
+        riskLevel = '🟡 Moderate';
+    }
+    
+    return {
+        '👤 Opponent': playerName,
+        '📊 Levels': `${currentLevel} vs ${opponentLevel}`,
+        '⚡ Level Diff': `${levelDiff} ${levelDiff > 10 ? '⚡' : ''}`,
+        '🎯 Risk Level': riskLevel,
+        '💰 Bet Amount': `${betAmount.toLocaleString()} gold`,
+        '🏆 Potential Win': `${potentialWin.toLocaleString()} gold`,
+        '❤️ Condition': '15%',
+        '⏰ Time Limit': '30 min'
+    };
+}
 
 // Accept a challenge
 window.acceptChallenge = async function(challengeId) {
     if (window.restSystem?.isResting) {
-        alert('Cannot accept challenges while resting!');
+        window.showCustomModal('warning', 'Cannot accept challenges while resting!', 'You need to be active to race against other players.');
         return false;
     }
 
@@ -4540,14 +4947,14 @@ window.acceptChallenge = async function(challengeId) {
     try {
         const challengeDoc = await getDoc(doc(db, "challenges", challengeId));
         if (!challengeDoc.exists()) {
-            alert('Challenge not found!');
+            window.showCustomModal('error', 'Challenge not found!', 'This challenge may have expired or been cancelled.');
             return;
         }
 
         const challenge = challengeDoc.data();
         
         if (challenge.targetId !== user.uid) {
-            alert('This challenge is not for you!');
+            window.showCustomModal('error', 'Invalid Challenge', 'This challenge is not for you!');
             return;
         }
 
@@ -4558,98 +4965,48 @@ window.acceptChallenge = async function(challengeId) {
         const targetData = targetDoc.data();
 
         if (challengerData.condition < challenge.conditionCost || targetData.condition < challenge.conditionCost) {
-            alert('One of the players does not have enough condition!');
+            window.showCustomModal('warning', 'Not Enough Condition', 
+                'One of the players does not have enough condition to race!');
             return;
         }
 
-        if (confirm(`Accept race challenge from ${challenge.challengerName}?\n\nBet Amount: ${challenge.betAmount} gold\nCondition Cost: ${challenge.conditionCost}%`)) {
+        // Use custom confirm modal instead of native confirm
+        const acceptChallenge = await window.showCustomConfirm(
+            `Accept race challenge from ${challenge.challengerName}?`,
+            'Challenge Details',
+            `Track: ${challenge.track?.name || 'Unknown'}\nBet Amount: ${challenge.betAmount} gold\nCondition Cost: ${challenge.conditionCost}%`,
+            {
+                'Challenger': challenge.challengerName,
+                'Bet': `${challenge.betAmount} gold`,
+                'Condition': `${challenge.conditionCost}%`
+            }
+        );
+
+        if (acceptChallenge) {
             await updateDoc(doc(db, "challenges", challengeId), {
                 status: 'accepted',
                 acceptedAt: serverTimestamp()
             });
 
+            window.showCustomModal('success', 'Challenge Accepted!', 
+                `You have accepted the challenge from ${challenge.challengerName}. Preparing the race...`);
+
             startEnhancedPVPRace(challengeId, challenge);
         }
+
     } catch (error) {
-        alert('Error accepting challenge: ' + error.message);
+        window.showCustomModal('error', 'Error Accepting Challenge', error.message);
     }
 
     await checkPendingChallenges();
 };
 
-// ========== PENDING CHALLENGES CHECK ==========
-async function checkPendingChallenges() {
-    const user = auth.currentUser;
-    if (!user) {
-        console.log("No user logged in, skipping pending challenges check");
-        return;
-    }
-
-    try {
-        console.log("🔍 Checking for pending challenges...");
-        
-        const receivedChallengesQuery = query(
-            collection(db, "challenges"),
-            where("targetId", "==", user.uid),
-            where("status", "==", "pending")
-        );
-        
-        const receivedSnapshot = await getDocs(receivedChallengesQuery);
-        let pendingCount = 0;
-        
-        receivedSnapshot.forEach(doc => {
-            const challenge = doc.data();
-            if (challenge.expiresAt) {
-                const expiresAt = challenge.expiresAt.toDate();
-                if (expiresAt > new Date()) {
-                    pendingCount++;
-                }
-            }
-        });
-        
-        console.log(`📬 Pending challenges: ${pendingCount}`);
-        
-        updateChallengeIndicator(pendingCount);
-        
-    } catch (error) {
-        console.error('Error checking pending challenges:', error);
-    }
-}
-
-// Update the red dot indicator in navbar
-function updateChallengeIndicator(pendingCount) {
-    const challengeIndicator = document.getElementById('challenge-indicator');
-    if (challengeIndicator) {
-        if (pendingCount > 0) {
-            challengeIndicator.style.display = 'block';
-            challengeIndicator.textContent = pendingCount;
-        } else {
-            challengeIndicator.style.display = 'none';
-        }
-    }
-}
-
+// ========== FIXED PVP RACE CALCULATION ==========
 async function startEnhancedPVPRace(challengeId, challenge) {
     console.log('🔍 DEBUG: Starting enhanced PvP race...');
-    console.log('🔍 DEBUG: Challenge ID:', challengeId);
-    console.log('🔍 DEBUG: Current user:', auth.currentUser.uid);
-    console.log('🔍 DEBUG: Challenger ID:', challenge.challengerId);
-    console.log('🔍 DEBUG: Target ID:', challenge.targetId);
     
-    // Add permission check
-    const isChallenger = auth.currentUser.uid === challenge.challengerId;
-    const isTarget = auth.currentUser.uid === challenge.targetId;
-    console.log('🔍 DEBUG: User is challenger?', isChallenger);
-    console.log('🔍 DEBUG: User is target?', isTarget);
-    
-    if (!isChallenger && !isTarget) {
-        console.error('❌ User not authorized for this challenge');
-        alert('You are not authorized to run this race');
-        return;
-    }
-
     if (window.restSystem?.isResting) {
-        alert('Cannot race while resting!');
+        window.showCustomModal('warning', 'Cannot Race While Resting', 'You need to be active to participate in races.');
         return false;
     }
     
@@ -4660,6 +5017,11 @@ async function startEnhancedPVPRace(challengeId, challenge) {
     }
 
     try {
+        // Show loading modal
+        await window.showCustomModal('info', 'Starting Race...', 
+            'Calculating race results based on player stats and equipment...', 
+            {}, '', 'Race Calculation');
+
         console.log('🔍 DEBUG: Fetching user data...');
         // Get both players' data
         const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -4673,60 +5035,53 @@ async function startEnhancedPVPRace(challengeId, challenge) {
         const userData = userDoc.data();
         const opponentData = opponentDoc.data();
 
-        // ADD GOLD CHECK HERE
-        console.log('🔍 DEBUG: User gold:', userData.gold);
-        console.log('🔍 DEBUG: Opponent gold:', opponentData.gold);
-        console.log('🔍 DEBUG: Bet amount:', challenge.betAmount);
-
+        // Gold check
         if (userData.gold < challenge.betAmount) {
-            console.error('❌ User insufficient gold');
-            alert(`You don't have enough gold! Needed: ${challenge.betAmount}, You have: ${userData.gold}`);
+            window.showCustomModal('error', 'Insufficient Gold', 
+                `You don't have enough gold for this race!\nNeeded: ${challenge.betAmount}\nYou have: ${userData.gold}`);
             return;
         }
 
         if (opponentData.gold < challenge.betAmount) {
-            console.error('❌ Opponent insufficient gold');
-            alert(`Opponent doesn't have enough gold! Challenge cancelled.`);
+            window.showCustomModal('warning', 'Opponent Insufficient Gold', 
+                'Opponent doesn\'t have enough gold! Challenge cancelled.');
             return;
         }
 
         console.log('🏁 Starting ENHANCED PvP race calculation...');
 
-        // Calculate race times
+        // Calculate race times with improved algorithm
         const userTime = calculateEnhancedRaceTime(userData, challenge.track, 
-            user.uid === challenge.challengerId ? challenge.levelDifference : -challenge.levelDifference,
-            opponentData.level || 1);
-            
-        const opponentTime = calculateEnhancedRaceTime(opponentData, challenge.track,
-            user.uid === challenge.challengerId ? -challenge.levelDifference : challenge.levelDifference,
-            userData.level || 1);
+    user.uid === challenge.challengerId ? challenge.levelDifference : -challenge.levelDifference,
+    opponentData.level || 1);
+    
+const opponentTime = calculateEnhancedRaceTime(opponentData, challenge.track,
+    user.uid === challenge.challengerId ? -challenge.levelDifference : challenge.levelDifference,
+    userData.level || 1);
 
-        // FIXED: Proper winner determination
-        let winnerId, isDraw;
-        
-        if (Math.abs(userTime - opponentTime) < 1.5) {
-            // It's a draw if times are very close
-            isDraw = true;
-            winnerId = null;
-        } else if (userTime < opponentTime) {
-            // User wins
-            isDraw = false;
-            winnerId = user.uid;
-        } else {
-            // Opponent wins
-            isDraw = false;
-            winnerId = opponentId;
-        }
+// FIXED: Much less sensitive winner determination
+const timeDifference = Math.abs(userTime - opponentTime);
+let winnerId, isDraw;
+
+// Only draw if extremely close (0.2 seconds)
+if (timeDifference < 0.2) {
+    isDraw = true;
+    winnerId = null;
+    console.log('🤝 Extremely close race - draw declared');
+} else if (userTime < opponentTime) {
+    isDraw = false;
+    winnerId = user.uid;
+} else {
+    isDraw = false;
+    winnerId = opponentId;
+}
 
         console.log('⏱️ Race times:', {
             userTime: userTime,
             opponentTime: opponentTime,
-            difference: Math.abs(userTime - opponentTime),
+            difference: timeDifference,
             isDraw: isDraw,
-            winnerId: winnerId,
-            userLevel: userData.level,
-            opponentLevel: opponentData.level,
-            levelDifference: challenge.levelDifference
+            winnerId: winnerId
         });
 
         // Calculate rewards
@@ -4744,7 +5099,7 @@ async function startEnhancedPVPRace(challengeId, challenge) {
         const winnerName = winnerId === challenge.challengerId ? challenge.challengerName : challenge.targetName;
         const loserName = winnerId === challenge.challengerId ? challenge.targetName : challenge.challengerName;
         
-        // Create result message for BOTH players
+        // Create result message
         const resultMessage = isDraw ? 
             `🤝 Race ended in a draw! Times: ${formatTime(userTime)} vs ${formatTime(opponentTime)}` :
             `🏁 ${winnerName} won ${rewards.goldTransfer} gold from ${loserName}! Times: ${formatTime(userTime)} vs ${formatTime(opponentTime)}`;
@@ -4771,48 +5126,46 @@ async function startEnhancedPVPRace(challengeId, challenge) {
 
         console.log('📝 Updating challenge with results...');
         await updateDoc(doc(db, "challenges", challengeId), updateData);
-        console.log('✅ Challenge updated successfully!');
 
-        // 🎯 FIXED: Update ONLY current user's stats (not opponent's)
-console.log('🔄 Updating CURRENT user stats only...');
+        // Update CURRENT user's stats only
+        console.log('🔄 Updating CURRENT user stats only...');
 
-if (isDraw) {
-    // Draw - current user loses condition and gets XP
-    await updateDoc(doc(db, "users", user.uid), {
-        condition: userData.condition - challenge.conditionCost
-    });
-    await addXP(user.uid, rewards.xpReward);
-    console.log('🤝 Draw: User lost condition and gained XP');
-} else {
-    if (user.uid === winnerId) {
-        // Current user wins - gains gold and fame
-        await updateDoc(doc(db, "users", user.uid), {
-            condition: userData.condition - challenge.conditionCost,
-            gold: userData.gold + rewards.goldTransfer,
-            fame: (userData.fame || 0) + rewards.fameTransfer        
-        });
-        await addXP(user.uid, rewards.xpReward);
-        console.log('🏆 User won: Gained gold/fame');
-        if (window.trackPVPWin) window.trackPVPWin();
-    } else {
-        // Current user loses - loses gold
-        await updateDoc(doc(db, "users", user.uid), {
-            condition: userData.condition - challenge.conditionCost,
-            gold: Math.max(0, userData.gold - challenge.betAmount),
-            fame: Math.max(0, (userData.fame || 0) - Math.floor(rewards.fameTransfer * 0.5))
-        });
-        await addXP(user.uid, Math.floor(rewards.xpReward * 0.3));
-        console.log('😞 User lost: Lost gold');
-    }
-}
+        if (isDraw) {
+            // Draw - current user loses condition and gets XP
+            await updateDoc(doc(db, "users", user.uid), {
+                condition: userData.condition - challenge.conditionCost
+            });
+            await addXP(user.uid, rewards.xpReward);
+            console.log('🤝 Draw: User lost condition and gained XP');
+        } else {
+            if (user.uid === winnerId) {
+                // Current user wins - gains gold and fame
+                await updateDoc(doc(db, "users", user.uid), {
+                    condition: userData.condition - challenge.conditionCost,
+                    gold: userData.gold + rewards.goldTransfer,
+                    fame: (userData.fame || 0) + rewards.fameTransfer        
+                });
+                await addXP(user.uid, rewards.xpReward);
+                console.log('🏆 User won: Gained gold/fame');
+                if (window.trackPVPWin) window.trackPVPWin();
+            } else {
+                // Current user loses - loses gold
+                await updateDoc(doc(db, "users", user.uid), {
+                    condition: userData.condition - challenge.conditionCost,
+                    gold: Math.max(0, userData.gold - challenge.betAmount),
+                    fame: Math.max(0, (userData.fame || 0) - Math.floor(rewards.fameTransfer * 0.5))
+                });
+                await addXP(user.uid, Math.floor(rewards.xpReward * 0.3));
+                console.log('😞 User lost: Lost gold');
+            }
+        }
 
-console.log('✅ Current user stats updated successfully!');
+        console.log('✅ Current user stats updated successfully!');
 
-        // Create notifications for BOTH players
-        console.log('📢 Creating notifications for both players...');
+        // Create notifications for both players
         await notifyBothPlayers(challengeId, resultMessage, challenge.challengerId, challenge.targetId);
 
-        // Show results to current player
+        // Show enhanced results using custom modal
         showEnhancedRaceResults(challenge, userTime, opponentTime, winnerName, isDraw, rewards, userData.gold, opponentData.gold);
 
         // Refresh player data
@@ -4824,102 +5177,69 @@ console.log('✅ Current user stats updated successfully!');
 
     } catch (error) {
         console.error('❌ Error in enhanced PVP race:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        
-        alert('Error processing race: ' + error.message);
+        window.showCustomModal('error', 'Race Error', `Failed to process race: ${error.message}`);
     }
 }
 
-// 🎯 ENHANCED: Improved results display that works for both players
-function showEnhancedRaceResults(challenge, time1, time2, winnerName, isDraw, rewards, userGold, opponentGold) {
-    const existingModal = document.querySelector('.race-results-modal');
-    if (existingModal) existingModal.remove();
+// ========== ENHANCED RACE RESULTS WITH CUSTOM MODAL ==========
+function showEnhancedRaceResults(challenge, userTime, opponentTime, winnerName, isDraw, rewards, userGold, opponentGold) {
+    const timeDifference = Math.abs(userTime - opponentTime);
+    const userWon = userTime < opponentTime;
+    const opponentName = winnerName === challenge.challengerName ? challenge.targetName : challenge.challengerName;
+    
+    const statsData = {
+        'Your Time': formatTime(userTime),
+        'Opponent Time': formatTime(opponentTime),
+        'Time Difference': `${timeDifference.toFixed(2)}s`,
+        'Bet Amount': `${challenge.betAmount} gold`
+    };
 
-    const levelDiffText = challenge.levelDifference === 0 ? 
-        "Same level" : 
-        `Level difference: ${challenge.levelDifference}`;
+    if (!isDraw) {
+        statsData['Gold Transfer'] = `${rewards.goldTransfer} gold`;
+        statsData['Fame Transfer'] = `${rewards.fameTransfer} fame`;
+    }
     
-    const wealthInfo = userGold > 10000 || opponentGold > 10000 ? 
-        `💰 High Stakes Match (Wealth multiplier: ${rewards.wealthFactor.toFixed(1)}x)` : 
-        '';
+    statsData['XP Gained'] = `${rewards.xpReward} XP`;
+
+    let modalType, title, message, details;
     
-    const resultHTML = `
-        <div class="race-results">
-            <h3>🏁 Race Results</h3>
-            ${wealthInfo ? `<div class="wealth-info" style="color: #feca57; text-align: center; margin-bottom: 1rem;">${wealthInfo}</div>` : ''}
-            <div class="race-track">Track: ${challenge.track?.name || 'Unknown Track'}</div>
-            <div class="race-level-info">${levelDiffText}</div>
-            <div class="race-times">
-                <div class="racer-time">
-                    <span>${challenge.challengerName}</span>
-                    <span>${formatTime(time1)}</span>
-                </div>
-                <div class="racer-time">
-                    <span>${challenge.targetName}</span>
-                    <span>${formatTime(time2)}</span>
-                </div>
-            </div>
-            <div class="race-outcome">
-                ${isDraw ? "🤝 It's a draw!" : `🎉 Winner: ${winnerName}!`}
-            </div>
-            <div class="race-rewards">
-                ${!isDraw ? `
-                    <div>💰 ${winnerName} won ${rewards.goldTransfer} gold</div>
-                    <div>⭐ ${rewards.xpReward} XP for winner</div>
-                    <div>🏆 ${rewards.fameTransfer} Fame transferred</div>
-                ` : `
-                    <div>🤝 Draw - No gold/fame transfer</div>
-                    <div>⭐ ${rewards.xpReward} XP for both players</div>
-                `}
-                <div>❤️ -${challenge.conditionCost}% Condition for both</div>
-                ${rewards.rewardMultiplier !== 1 ? `
-                    <div class="reward-breakdown">
-                        <h4>Reward Breakdown:</h4>
-                        <div>📊 Multiplier: ${rewards.rewardMultiplier.toFixed(2)}x</div>
-                        ${rewards.statAdvantage !== 0 ? `<div>🎯 Stat Advantage: ${(rewards.statAdvantage * 100).toFixed(1)}%</div>` : ''}
-                        ${rewards.levelAdvantage !== 0 ? `<div>📈 Level Advantage: ${(rewards.levelAdvantage * 100).toFixed(1)}%</div>` : ''}
-                        ${rewards.wealthFactor !== 1 ? `<div>💰 Wealth Factor: ${rewards.wealthFactor.toFixed(1)}x</div>` : ''}
-                    </div>
-                ` : ''}
-            </div>
-            <div class="result-notification">
-                <p>🏁 Race completed! Check "Race Results" for future updates.</p>
-            </div>
-        </div>
-    `;
-    
-    // Create modal for results
-    const modal = document.createElement('div');
-    modal.className = 'race-results-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        border: 2px solid #00ffff;
-        border-radius: 15px;
-        padding: 2rem;
-        color: white;
-        z-index: 10000;
-        min-width: 450px;
-        max-width: 500px;
-        box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
-    `;
-    modal.innerHTML = resultHTML;
-    
-    document.body.appendChild(modal);
-    
-    // Close on click
-    setTimeout(() => {
-        modal.addEventListener('click', () => modal.remove());
-    }, 3000);
-    
-    // Auto-close after 15 seconds
-    setTimeout(() => {
-        if (modal.parentNode) modal.remove();
-    }, 15000);
+    if (isDraw) {
+        modalType = 'info';
+        title = 'Race Draw! 🏁';
+        message = `🤝 Incredibly Close Finish!`;
+        details = `You and ${opponentName} crossed the line virtually simultaneously! \n\nThis was a display of pure racing excellence from both drivers.`;
+    } else if (userWon) {
+        modalType = 'success';
+        title = 'Victory! 🏆';
+        message = `You defeated ${opponentName}!`;
+        
+        if (timeDifference < 2) {
+            details = `A nail-biting finish! You edged out ${opponentName} by just ${timeDifference.toFixed(2)} seconds in an intense battle to the line.`;
+        } else if (timeDifference < 5) {
+            details = `A solid victory! You outperformed ${opponentName} with skillful driving and better race craft.`;
+        } else {
+            details = `A dominant performance! You completely outclassed ${opponentName} with superior speed and strategy.`;
+        }
+    } else {
+        modalType = 'warning';
+        title = 'Defeat';
+        message = `You lost to ${winnerName}`;
+        
+        if (timeDifference < 2) {
+            details = `Heartbreakingly close! ${winnerName} barely edged you out by ${timeDifference.toFixed(2)} seconds in a photo finish.`;
+        } else if (timeDifference < 5) {
+            details = `A tough battle! ${winnerName} had the edge today, but you put up a strong fight.`;
+        } else {
+            details = `${winnerName} demonstrated superior performance today. Learn from this and come back stronger!`;
+        }
+    }
+
+    // Add track info if available
+    if (challenge.track?.name) {
+        details += `\n\n🏁 Track: ${challenge.track.name}${challenge.track.difficulty ? ` (${challenge.track.difficulty})` : ''}`;
+    }
+
+    window.showCustomModal(modalType, message, details, statsData, '', title);
 }
 
 function getRandomTrack() {
@@ -5072,6 +5392,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// ========== PENDING CHALLENGES CHECK ==========
+async function checkPendingChallenges() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("No user logged in, skipping pending challenges check");
+        return;
+    }
+
+    try {
+        console.log("🔍 Checking for pending challenges...");
+        
+        const receivedChallengesQuery = query(
+            collection(db, "challenges"),
+            where("targetId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+        
+        const receivedSnapshot = await getDocs(receivedChallengesQuery);
+        let pendingCount = 0;
+        
+        receivedSnapshot.forEach(doc => {
+            const challenge = doc.data();
+            if (challenge.expiresAt) {
+                const expiresAt = challenge.expiresAt.toDate();
+                if (expiresAt > new Date()) {
+                    pendingCount++;
+                }
+            } else {
+                pendingCount++;
+            }
+        });
+        
+        console.log(`📬 Pending challenges: ${pendingCount}`);
+        
+        updateChallengeIndicator(pendingCount);
+        
+    } catch (error) {
+        console.error('Error checking pending challenges:', error);
+    }
+}
+
+// Update the red dot indicator in navbar
+function updateChallengeIndicator(pendingCount) {
+    const challengeIndicator = document.getElementById('challenge-indicator');
+    if (challengeIndicator) {
+        if (pendingCount > 0) {
+            challengeIndicator.style.display = 'block';
+            challengeIndicator.textContent = pendingCount > 9 ? '9+' : pendingCount;
+        } else {
+            challengeIndicator.style.display = 'none';
+        }
+    }
+}
 
 // ========== ENHANCED DAILY CHALLENGES SYSTEM ==========
 let dailyChallenges = [];
@@ -5899,56 +6273,74 @@ window.claimChallengeReward = async function(challengeId) {
     }
 };
 
-// Show challenge completion notification
+// ENHANCED: Show challenge completion notification using custom modal
+// ENHANCED: Show challenge completion with compact layout
 function showChallengeCompleteNotification(challenge) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #00ff88, #00ffff);
-        color: #1a1a2e;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0, 255, 255, 0.3);
-        z-index: 10000;
-        animation: slideInRight 0.3s ease;
-        cursor: pointer;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: bold;
-        max-width: 300px;
+    const rewards = [];
+    if (challenge.reward.gold) rewards.push(`💰 +${challenge.reward.gold}`);
+    if (challenge.reward.xp) rewards.push(`⭐ +${challenge.reward.xp}`);
+    if (challenge.reward.tokens) rewards.push(`💎 +${challenge.reward.tokens}`);
+    if (challenge.reward.item) rewards.push(`🎁 ${challenge.reward.item}`);
+    if (challenge.reward.fame) rewards.push(`🏆 +${challenge.reward.fame}`);
+
+    // Use compact reward display
+    const rewardsHTML = `
+        <div class="rewards-compact">
+            ${rewards.map(reward => `
+                <div class="reward-item">
+                    <span class="reward-amount">${reward}</span>
+                </div>
+            `).join('')}
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 100%"></div>
+            </div>
+            <div class="progress-text">
+                <span>Progress: ${challenge.progress}/${challenge.target}</span>
+                <span>100% Complete</span>
+            </div>
+        </div>
     `;
-    
-    notification.innerHTML = `
-        <div>🎉 Challenge Complete!</div>
-        <div style="font-size: 0.9rem; margin-top: 0.5rem;">${challenge.title}</div>
-        <div style="font-size: 0.8rem; margin-top: 0.3rem;">Click to claim rewards</div>
-    `;
-    
-    notification.onclick = () => {
-        claimChallengeReward(challenge.id);
-        notification.remove();
-    };
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
+
+    window.showCustomModal('challenge', 
+        '🎯 Challenge Complete!',
+        `You've completed <strong>"${challenge.title}"</strong>`,
+        {}, // Empty stats - we're using custom HTML above
+        `
+            <button class="activity-btn primary" onclick="claimChallengeReward('${challenge.id}'); window.hideCustomModal();">
+                Claim Rewards
+            </button>
+            <button class="activity-btn secondary" onclick="window.hideCustomModal()">
+                Later
+            </button>
+        `,
+        'Daily Challenge'
+    );
 }
 
-// Show reward notification
+// ENHANCED: Show reward notification using custom modal
 function showRewardNotification(challenge) {
-    let rewardText = `🎉 Rewards Claimed!\n\n${challenge.title}\n\n`;
-    
-    if (challenge.reward.gold) rewardText += `💰 +${challenge.reward.gold} Gold\n`;
-    if (challenge.reward.xp) rewardText += `⭐ +${challenge.reward.xp} XP\n`;
-    if (challenge.reward.tokens) rewardText += `💎 +${challenge.reward.tokens} Tokens\n`;
-    if (challenge.reward.item) rewardText += `🎁 +${challenge.reward.item} (New Item!)\n`;
-    
-    alert(rewardText);
+    const rewards = [];
+    if (challenge.reward.gold) rewards.push(`💰 +${challenge.reward.gold} Gold`);
+    if (challenge.reward.xp) rewards.push(`⭐ +${challenge.reward.xp} XP`);
+    if (challenge.reward.tokens) rewards.push(`💎 +${challenge.reward.tokens} Tokens`);
+    if (challenge.reward.item) rewards.push(`🎁 ${challenge.reward.item}`);
+    if (challenge.reward.fame) rewards.push(`🏆 +${challenge.reward.fame} Fame`);
+
+    const stats = {};
+    rewards.forEach((reward, index) => {
+        stats[`Reward ${index + 1}`] = reward;
+    });
+
+    window.showCustomModal('reward',
+        '🎉 Rewards Claimed!',
+        `You've claimed your rewards for <strong>"${challenge.title}"</strong>`,
+        stats,
+        '<button class="activity-btn primary" onclick="window.hideCustomModal()">Awesome!</button>',
+        'Challenge Completed'
+    );
 }
 
 // Auto-refresh challenges every 10 seconds when on missions page
@@ -11403,6 +11795,29 @@ function monitorTokens() {
 
 // Call this after page load
 monitorTokens();
+
+
+// Emergency fallback for modal functions
+if (typeof window.showCustomConfirm === 'undefined') {
+    console.warn('⚠️ Custom modal system failed, using browser fallback');
+    window.showCustomConfirm = function(message, title = 'Confirmation') {
+        return Promise.resolve(confirm(message));
+    };
+    window.showCustomModal = function(type, message, details, stats) {
+        alert(`${type.toUpperCase()}: ${message}\n${details || ''}`);
+    };
+    window.hideCustomModal = function() {};
+}
+
+// Debug function to check modal state
+window.debugModals = function() {
+    console.log('🔍 Modal Debug Info:');
+    console.log('showCustomConfirm:', typeof window.showCustomConfirm);
+    console.log('showCustomModal:', typeof window.showCustomModal);
+    console.log('hideCustomModal:', typeof window.hideCustomModal);
+    console.log('Modal element exists:', !!document.getElementById('activityModal'));
+    console.log('Custom modal system initialized:', window.customModalSystem?.isInitialized);
+};
 
 
 // ========== GLOBAL FUNCTION EXPORTS ==========
