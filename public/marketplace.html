@@ -1,3 +1,4 @@
+<html lang="en">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,90 +12,122 @@
 <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+
 </head>
 <body>
-    <!-- Navigation -->
+<!-- Navigation -->
     <div id="navbar-container"></div>
 
-   <!-- Player Trading Tab Content -->
-<div class="market-tab-content" id="player-trading-content">
-    <div class="trading-controls">
-        <div class="search-filter">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search vehicles, parts..." class="search-input" id="listing-search">
-            </div>
-            <select class="category-filter" id="category-filter">
-                <option value="all">All Categories</option>
-                <option value="vehicle">Vehicles</option>
-                <option value="engine">Engines</option>
-                <option value="part">Parts</option>
-                <option value="cosmetic">Cosmetics</option>
-            </select>
-            <select class="sort-filter" id="sort-filter">
-                <option value="newest">Newest First</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="ending">Ending Soon</option>
-            </select>
+    <div class="market-container">
+        <div class="section-header">
+            <h2>🏪 Player Marketplace</h2>
+            <p>Buy, sell, and trade items with other players</p>
         </div>
-        <button class="create-listing-btn" id="create-listing-btn">
-            <i class="fas fa-plus"></i> Create Listing
-        </button>
-    </div>
-    
-    <div class="listings-container">
-        <div class="listings-stats">
-            <span id="listings-count">0</span> active listings
-        </div>
-        <div class="listings-grid" id="listings-grid">
-            <!-- Listings will be dynamically loaded here -->
-        </div>
-        <div class="no-listings" id="no-listings" style="display: none;">
-            <i class="fas fa-store-slash"></i>
-            <h4>No listings found</h4>
-            <p>Try adjusting your filters or be the first to create a listing!</p>
-        </div>
-    </div>
-</div>
 
-<!-- Create Listing Modal -->
-<div class="modal" id="create-listing-modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="fas fa-plus"></i> Create New Listing</h3>
-            <span class="close-modal">&times;</span>
+        <!-- Market Tabs Navigation -->
+        <div class="market-tabs">
+            <button class="market-tab active" data-market-tab="weekly-deals">
+                🔥 Weekly Deals
+            </button>
+            <button class="market-tab" data-market-tab="player-market">
+                🌍 Player Market
+            </button>
+            <button class="market-tab" data-market-tab="team-market">
+                👥 Team Market
+            </button>
+            <button class="market-tab" data-market-tab="my-listings">
+                📋 My Listings
+            </button>
         </div>
-        <div class="modal-body">
-            <form id="create-listing-form">
-                <div class="form-group">
-                    <label>Select Item to Sell</label>
-                    <select id="item-select" required>
-                        <option value="">Choose an item...</option>
-                        <!-- Options will be populated from user inventory -->
-                    </select>
+
+        <!-- Market Content Areas -->
+        <div class="market-content">
+            
+            <!-- WEEKLY DEALS TAB -->
+            <div id="weekly-deals-tab" class="market-tab-content active">
+                <div class="market-header">
+                    <h3>🔥 This Week's Special Deals</h3>
+                    <div class="time-remaining" id="weekly-deals-timer">
+                        Refreshes in: <span id="deals-countdown">6 days, 23 hours</span>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Price (Gold)</label>
-                    <input type="number" id="listing-price" min="1" required>
+                
+                <div class="items-grid" id="weekly-deals-grid">
+                    <div class="loading-message">Loading weekly deals...</div>
                 </div>
-                <div class="form-group">
-                    <label>Listing Duration</label>
-                    <select id="listing-duration" required>
-                        <option value="86400">24 Hours</option>
-                        <option value="172800">48 Hours</option>
-                        <option value="259200">72 Hours</option>
-                    </select>
+            </div>
+
+            <!-- PLAYER MARKET TAB -->
+            <div id="player-market-tab" class="market-tab-content">
+                <div class="market-filters">
+                    <div class="filter-group">
+                        <label>Item Type:</label>
+                        <select id="item-type-filter">
+                            <option value="all">All Items</option>
+                            <option value="tires">Tires</option>
+                            <option value="seats">Seats</option>
+                            <option value="engines">Engines</option>
+                            <option value="suspensions">Suspensions</option>
+                            <option value="turbos">Turbos</option>
+                            <option value="cars">Cars</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Max Price:</label>
+                        <input type="number" id="max-price-filter" placeholder="Any price" min="0">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Rarity:</label>
+                        <select id="rarity-filter">
+                            <option value="all">All Rarities</option>
+                            <option value="common">Common</option>
+                            <option value="uncommon">Uncommon</option>
+                            <option value="rare">Rare</option>
+                            <option value="epic">Epic</option>
+                            <option value="legendary">Legendary</option>
+                        </select>
+                    </div>
+                    
+                    <button class="filter-btn" onclick="applyMarketFilters()">Apply Filters</button>
+                    <button class="filter-btn secondary" onclick="resetMarketFilters()">Reset</button>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="cancel-btn">Cancel</button>
-                    <button type="submit" class="create-btn">Create Listing</button>
+                
+                <div class="items-grid" id="player-market-grid">
+                    <div class="loading-message">Loading player market items...</div>
                 </div>
-            </form>
+            </div>
+
+            <!-- TEAM MARKET TAB -->
+            <div id="team-market-tab" class="market-tab-content">
+                <div class="market-header">
+                    <h3>👥 Team Marketplace</h3>
+                    <p>Trade items exclusively with your team members</p>
+                </div>
+                
+                <div class="items-grid" id="team-market-grid">
+                    <div class="loading-message">Loading team market items...</div>
+                </div>
+            </div>
+
+            <!-- MY LISTINGS TAB -->
+            <div id="my-listings-tab" class="market-tab-content">
+                <div class="market-header">
+                    <h3>Your Active Listings</h3>
+                    <div class="listings-stats">
+                        <span id="active-listings-count">0 active listings</span>
+                    </div>
+                </div>
+                
+                <div class="items-grid" id="my-listings-grid">
+                    <div class="loading-message">Loading your listings...</div>
+                </div>
+            </div>
         </div>
     </div>
-</div>
+
 
     <script type="module" src="frontend.js"></script>
 </body>
-</html>
+</html>     

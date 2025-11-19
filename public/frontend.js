@@ -12,11 +12,13 @@ import {
     doc, 
     setDoc, 
     getDoc, 
-    updateDoc, 
+    updateDoc,
+    deleteDoc,
     arrayUnion,
     arrayRemove,
     collection, 
     getDocs,
+    increment,
     query,
     orderBy,
     limit,
@@ -3255,40 +3257,53 @@ function generateImageFallbacks(itemId, itemType) {
 
 // FIXED: Enhanced inventory image path resolver
 function getInventoryImagePath(item) {
-    if (!item) return 'images/cars/default_car.jpg';
+    // Use the same logic as getItemImage but for inventory items
+    const imageFields = ['image', 'imageUrl', 'icon', 'img', 'picture', 'thumbnail'];
     
-    // For cars, use the car images directory
-    if (item.type === 'car') {
-        const carId = item.id.toLowerCase().replace(/ /g, '_');
-        const patterns = [
-            `images/cars/${carId}.jpg`,
-            `images/cars/${carId}.png`,
-            `images/cars/${item.id}.jpg`,
-            `images/cars/${item.id}.png`,
-            `images/cars/default_car.jpg`,
-            'images/cars/rusty_rider.jpg' // Ultimate fallback
-        ];
-        return patterns[0]; // Return the first pattern (will try others via onerror)
+    for (const field of imageFields) {
+        if (item[field] && typeof item[field] === 'string') {
+            let imageUrl = item[field];
+            imageUrl = imageUrl.replace('items/', '');
+            
+            // Fix common path issues
+            if (imageUrl.includes('turboss')) {
+                imageUrl = imageUrl.replace('turboss', 'turbos');
+            }
+            if (imageUrl.includes('enginess')) {
+                imageUrl = imageUrl.replace('enginess', 'engines');
+            }
+            
+            if (!imageUrl.startsWith('http') && !imageUrl.startsWith('/') && !imageUrl.startsWith('images/')) {
+                imageUrl = `images/${imageUrl}`;
+            }
+            
+            console.log(`🎒 Inventory image path: ${imageUrl}`);
+            return imageUrl;
+        }
     }
     
-    // For other item types, use their respective directories
-    if (item.type) {
-        const itemId = item.id.toLowerCase().replace(/ /g, '_');
-        const typeFolder = `${item.type}s`; // engines, tires, turbos, etc.
-        
-        const patterns = [
-            `images/${typeFolder}/${itemId}.jpg`,
-            `images/${typeFolder}/${itemId}.png`,
-            `images/${typeFolder}/${item.id}.jpg`,
-            `images/${typeFolder}/${item.id}.png`,
-            `images/${typeFolder}/default_${item.type}.jpg`,
-            `images/cars/default_car.jpg` // Ultimate fallback
-        ];
-        return patterns[0];
-    }
+    // Proper plural mapping for fallback
+    const pluralMap = {
+        'car': 'cars',
+        'engine': 'engines', 
+        'tire': 'tires',
+        'seat': 'seats',
+        'suspension': 'suspensions',
+        'turbo': 'turbos',
+        'default': 'items'
+    };
     
-    // Ultimate fallback
-    return 'images/cars/default_car.jpg';
+    const folderName = pluralMap[item.type] || item.type;
+    
+    // PRESERVE original filename structure
+    let itemName = (item.name || 'default').toLowerCase()
+        .replace(/\s+/g, '_') // ONLY replace spaces with underscores
+        .replace(/[^\w\-_]/g, ''); // Keep hyphens and underscores, remove other special chars
+    
+    const imagePath = `images/${folderName}/${itemName}.jpg`;
+    console.log(`🎒 Generated inventory image path: ${imagePath}`);
+    
+    return imagePath;
 }
 
 function formatItemType(type) {
@@ -3301,7 +3316,55 @@ function formatItemType(type) {
         'seat': 'Seats',
         'consumable': 'Consumable'
     };
-    return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1);
+    return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1) + 's';
+}
+
+function getCategoryIcon(type) {
+    const icons = {
+        'car': '🚗',
+        'engine': '⚙️',
+        'tire': '🌀',
+        'seat': '💺',
+        'suspension': '🔄',
+        'turbo': '💨',
+        'other': '📦'
+    };
+    return icons[type] || '📦';
+}
+
+function getCompactItemStats(item) {
+    const stats = [];
+    
+    if (item.minimumRequiredLevel) {
+        stats.push(`Lvl ${item.minimumRequiredLevel}`);
+    }
+    
+    const statFields = {
+        dexterity: 'Dex', handling: 'Hand', power: 'Pwr', speed: 'Spd',
+        structure: 'Struct', luck: 'Luck', boost: 'Boost'
+    };
+    
+    // Check stats object first
+    if (item.stats && typeof item.stats === 'object') {
+        for (const [field, abbreviation] of Object.entries(statFields)) {
+            if (item.stats[field] > 0) {
+                stats.push(`${abbreviation}+${item.stats[field]}`);
+                break;
+            }
+        }
+    }
+    
+    // Then check direct properties
+    if (stats.length === 0) {
+        for (const [field, abbreviation] of Object.entries(statFields)) {
+            if (item[field] > 0) {
+                stats.push(`${abbreviation}+${item[field]}`);
+                break;
+            }
+        }
+    }
+    
+    return stats.length > 0 ? stats[0] : 'Item';
 }
 
 function initializeInventory() {
@@ -6757,380 +6820,2736 @@ function updateStatBars(userData) {
     });
 }
 
-// Player Listings Functions
-class PlayerListings {
-    constructor() {
-        this.listings = [];
-        this.filters = {
-            category: 'all',
-            sort: 'newest',
-            search: ''
-        };
-        
-        // Only initialize if we're on the marketplace page
-        if (this.isOnMarketplacePage()) {
-            this.init();
+function formatPrice(price) {
+    return price.toLocaleString();
+}
+
+function formatTimeLeft(endTime) {
+    const timeLeft = endTime - Date.now();
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    return hours > 24 ? `${Math.floor(hours / 24)}d left` : `${hours}h left`;
+}
+
+// ========== COMPLETE FIXED MARKET SYSTEM ==========
+// ======================
+// CONFIG & INITIALIZATION
+// ======================
+
+let marketInitialized = false;
+let isGeneratingWeeklyDeals = false;
+let weeklyDealsGenerated = false;
+let activeListeners = new Set();
+
+async function getMarketConfig() {
+    try {
+        const configDoc = await getDoc(doc(db, "marketConfig", "config"));
+        if (configDoc.exists()) {
+            return configDoc.data();
+        } else {
+            const initialConfig = {
+                weeklyDeals: {
+                    active: true,
+                    categories: ["tires", "seats", "suspensions", "engines", "turbos", "cars"],
+                    itemsPerCategory: 1,
+                    discountRange: { min: 0.1, max: 0.3 },
+                    excludedItems: [],
+                    lastGenerated: serverTimestamp(),
+                    generatedBy: 'system'
+                },
+                fees: {
+                    playerMarketFee: 0.05,
+                    teamMarketFee: 0.02,
+                    listingFee: 50
+                },
+                priceControls: {
+                    minPricePercentage: 0.3,
+                    tokenItemsRequireTokens: true
+                }
+            };
+            await setDoc(doc(db, "marketConfig", "config"), initialConfig);
+            return initialConfig;
         }
-    }
-
-    isOnMarketplacePage() {
-        return window.location.pathname.includes('marketplace.html') || 
-               document.getElementById('listings-grid') !== null;
-    }
-
-    init() {
-        if (!this.isOnMarketplacePage()) return;
-        
-        try {
-            this.setupEventListeners();
-            this.loadListings();
-        } catch (error) {
-            console.log('PlayerListings not initialized (not on marketplace page)');
-        }
-    }
-
-    setupEventListeners() {
-        // Safely get elements with null checks
-        const searchInput = document.getElementById('listing-search');
-        const categoryFilter = document.getElementById('category-filter');
-        const sortFilter = document.getElementById('sort-filter');
-        const createBtn = document.getElementById('create-listing-btn');
-        const createForm = document.getElementById('create-listing-form');
-
-        // Search and filter with null checks
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.filters.search = e.target.value;
-                this.filterListings();
-            });
-        }
-
-        if (categoryFilter) {
-            categoryFilter.addEventListener('change', (e) => {
-                this.filters.category = e.target.value;
-                this.filterListings();
-            });
-        }
-
-        if (sortFilter) {
-            sortFilter.addEventListener('change', (e) => {
-                this.filters.sort = e.target.value;
-                this.sortListings();
-            });
-        }
-
-        // Create listing with null checks
-        if (createBtn) {
-            createBtn.addEventListener('click', () => {
-                this.showCreateListingModal();
-            });
-        }
-
-        if (createForm) {
-            createForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.createListing();
-            });
-        }
-    }
-
-    async loadListings() {
-        // Only load if we're on the marketplace page
-        if (!this.isOnMarketplacePage()) return;
-
-        try {
-            const grid = document.getElementById('listings-grid');
-            if (grid) {
-                grid.innerHTML = '<div class="loading">Loading listings...</div>';
-            }
-
-            // Load active listings from Firebase
-            const listingsRef = collection(db, 'marketplace/playerListings');
-            const q = query(listingsRef, where('status', '==', 'active'));
-            const querySnapshot = await getDocs(q);
-            
-            this.listings = [];
-            querySnapshot.forEach((doc) => {
-                this.listings.push({
-                    id: doc.id,
-                    ...doc.data()
-                });
-            });
-
-            this.renderListings();
-        } catch (error) {
-            console.error('Error loading listings:', error);
-            const grid = document.getElementById('listings-grid');
-            if (grid) {
-                grid.innerHTML = '<div class="error">Error loading listings</div>';
-            }
-        }
-    }
-
-    renderListings() {
-        const grid = document.getElementById('listings-grid');
-        const noListings = document.getElementById('no-listings');
-        const count = document.getElementById('listings-count');
-
-        // Safe element checks
-        if (!grid) return;
-
-        if (this.listings.length === 0) {
-            grid.innerHTML = '';
-            if (noListings) noListings.style.display = 'block';
-            if (count) count.textContent = '0';
-            return;
-        }
-
-        if (noListings) noListings.style.display = 'none';
-        if (count) count.textContent = this.listings.length.toString();
-
-        grid.innerHTML = this.listings.map(listing => `
-            <div class="listing-item" data-listing-id="${listing.id}">
-                <div class="seller-info">
-                    <div class="seller-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <span class="seller-name">${listing.sellerName}</span>
-                    <div class="seller-rating">
-                        <i class="fas fa-star"></i> ${listing.sellerRating || 'New'}
-                    </div>
-                </div>
-                <div class="listing-image">
-                    <img src="images/cars/${listing.itemData.image || 'default.jpg'}" alt="${listing.itemData.name}">
-                </div>
-                <div class="listing-info">
-                    <h4>${listing.itemData.name}</h4>
-                    <p>Level ${listing.itemData.minLevel} • ${this.formatItemType(listing.itemType)}</p>
-                    <div class="listing-stats">
-                        ${this.renderItemStats(listing.itemData)}
-                    </div>
-                    <div class="listing-price">
-                        <span class="price">${this.formatPrice(listing.price)}</span>
-                        <span class="currency">gold</span>
-                    </div>
-                    <div class="listing-time">
-                        <i class="fas fa-clock"></i> ${this.formatTimeLeft(listing.endTime)}
-                    </div>
-                </div>
-                <div class="listing-actions">
-                    ${this.canBuy(listing) ? `
-                        <button class="buyout-btn" onclick="playerListings.buyListing('${listing.id}')">
-                            Buy Now
-                        </button>
-                    ` : `
-                        <button class="buyout-btn disabled" disabled>
-                            Level ${listing.itemData.minLevel} Required
-                        </button>
-                    `}
-                </div>
-            </div>
-        `).join('');
-    }
-
-    filterListings() {
-        let filtered = this.listings;
-
-        // Category filter
-        if (this.filters.category !== 'all') {
-            filtered = filtered.filter(listing => listing.itemType === this.filters.category);
-        }
-
-        // Search filter
-        if (this.filters.search) {
-            const searchTerm = this.filters.search.toLowerCase();
-            filtered = filtered.filter(listing => 
-                listing.itemData.name.toLowerCase().includes(searchTerm) ||
-                listing.sellerName.toLowerCase().includes(searchTerm)
-            );
-        }
-
-        this.sortListings(filtered);
-    }
-
-    sortListings(listings = this.listings) {
-        switch (this.filters.sort) {
-            case 'price-low':
-                listings.sort((a, b) => a.price - b.price);
-                break;
-            case 'price-high':
-                listings.sort((a, b) => b.price - a.price);
-                break;
-            case 'ending':
-                listings.sort((a, b) => a.endTime - b.endTime);
-                break;
-            default: // newest
-                listings.sort((a, b) => b.createdAt - a.createdAt);
-        }
-
-        this.renderListings();
-    }
-
-    async showCreateListingModal() {
-        await this.populateItemSelect();
-        const modal = document.getElementById('create-listing-modal');
-        if (modal) {
-            modal.style.display = 'block';
-        }
-    }
-
-    async populateItemSelect() {
-        const select = document.getElementById('item-select');
-        if (!select) return;
-        
-        // This would load from user's inventory
-        // For now, placeholder
-        select.innerHTML = `
-            <option value="">Choose an item...</option>
-            <option value="car_1" data-type="vehicle">Sports Coupe</option>
-            <option value="engine_1" data-type="engine">Turbo Engine</option>
-        `;
-    }
-
-    async createListing() {
-        const form = document.getElementById('create-listing-form');
-        if (!form) return;
-        
-        const formData = new FormData(form);
-        
-        // Safe reference to currentUser
-        const user = auth.currentUser;
-        if (!user) {
-            alert('Please log in to create listings.');
-            return;
-        }
-        
-        const listingData = {
-            sellerId: user.uid,
-            sellerName: user.displayName || user.email.split('@')[0],
-            itemType: document.getElementById('item-select')?.selectedOptions[0]?.dataset?.type || 'vehicle',
-            itemId: formData.get('item'),
-            itemData: this.getItemData(formData.get('item')),
-            price: parseInt(formData.get('price')) || 0,
-            endTime: Date.now() + (parseInt(formData.get('duration')) * 1000),
-            createdAt: Date.now(),
-            status: 'active'
-        };
-
-        try {
-            const docRef = await addDoc(collection(db, 'marketplace/playerListings'), listingData);
-            console.log('Listing created:', docRef.id);
-            this.closeModal();
-            this.loadListings(); // Refresh listings
-        } catch (error) {
-            console.error('Error creating listing:', error);
-            alert('Error creating listing: ' + error.message);
-        }
-    }
-
-    async buyListing(listingId) {
-        const listing = this.listings.find(l => l.id === listingId);
-        if (!listing) return;
-
-        // Safe reference to currentUser
-        const user = auth.currentUser;
-        if (!user) {
-            alert('Please log in to buy items.');
-            return;
-        }
-
-        // Check if user has enough gold (you'll need to load user data)
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const userData = userDoc.data();
-        
-        if (!userData || userData.gold < listing.price) {
-            alert('Not enough gold!');
-            return;
-        }
-
-        try {
-            // Update listing status
-            await updateDoc(doc(db, 'marketplace/playerListings', listingId), {
-                status: 'sold',
-                soldTo: user.uid,
-                soldAt: Date.now()
-            });
-
-            // Transfer gold (you'd need a transaction here)
-            // Add item to buyer's inventory
-            // Remove item from seller's inventory
-
-            alert('Purchase successful!');
-            this.loadListings(); // Refresh
-        } catch (error) {
-            console.error('Error buying listing:', error);
-            alert('Error purchasing item: ' + error.message);
-        }
-    }
-
-    // Helper functions
-    formatPrice(price) {
-        return price.toLocaleString();
-    }
-
-    formatTimeLeft(endTime) {
-        const timeLeft = endTime - Date.now();
-        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-        return hours > 24 ? `${Math.floor(hours / 24)}d left` : `${hours}h left`;
-    }
-
-    canBuy(listing) {
-        const user = auth.currentUser;
-        if (!user) return false;
-        
-        // You'll need to load user level from Firestore
-        // For now, return true as placeholder
-        return true;
-    }
-
-    formatItemType(type) {
-        const types = {
-            vehicle: 'Vehicle',
-            engine: 'Engine',
-            part: 'Part',
-            cosmetic: 'Cosmetic'
-        };
-        return types[type] || type;
-    }
-
-    renderItemStats(itemData) {
-        // This would render stats based on item type
-        if (itemData.power) return `<span>Power: ${itemData.power}</span>`;
-        if (itemData.speed) return `<span>Speed: ${itemData.speed}</span>`;
-        return '';
-    }
-
-    getItemData(itemId) {
-        // This would fetch actual item data from your items collection
-        // Placeholder
-        return {
-            name: "Sports Coupe",
-            minLevel: 5,
-            power: 45,
-            speed: 60,
-            image: "sports_coupe.jpg"
-        };
-    }
-
-    closeModal() {
-        const modal = document.getElementById('create-listing-modal');
-        const form = document.getElementById('create-listing-form');
-        
-        if (modal) modal.style.display = 'none';
-        if (form) form.reset();
+    } catch (error) {
+        console.error('Error getting market config:', error);
+        return null;
     }
 }
 
-// Safe initialization - only on marketplace pages
-let playerListings;
-document.addEventListener('DOMContentLoaded', () => {
-    // Only create PlayerListings if we're on the marketplace page
-    if (window.location.pathname.includes('marketplace.html') || 
-        document.getElementById('listings-grid')) {
-        playerListings = new PlayerListings();
+async function initializeMarketSystem() {
+    console.log('🛒 Initializing market system...');
+    
+    if (marketInitialized) return;
+    
+    try {
+        await getMarketConfig();
+        await checkWeeklyDealsStatus();
+        await checkAndRotateWeeklyDeals();
+        marketInitialized = true;
+        console.log('✅ Market system ready');
+    } catch (error) {
+        console.error('❌ Market initialization failed:', error);
+    }
+}
+
+// Utility function to fix seller names
+window.fixWeeklyDealsSellers = async function() {
+    try {
+        const weeklyDeals = await getMarketListings('weekly-deals');
+        console.log(`🛠️ Fixing ${weeklyDeals.length} weekly deals seller names...`);
+        
+        let fixedCount = 0;
+        for (const deal of weeklyDeals) {
+            if (deal.sellerId !== 'system' || deal.sellerName !== 'Weekly Deals') {
+                await updateDoc(doc(db, "marketListings", deal.id), {
+                    sellerId: 'system',
+                    sellerName: 'Weekly Deals'
+                });
+                fixedCount++;
+                console.log(`✅ Fixed: ${deal.itemData.name}`);
+            }
+        }
+        console.log(`🎉 Fixed ${fixedCount} weekly deals seller names!`);
+        alert(`Fixed ${fixedCount} weekly deals seller names!`);
+        
+    } catch (error) {
+        console.error('Error fixing seller names:', error);
+        alert('Error fixing seller names: ' + error.message);
+    }
+};
+
+// ======================
+// PLAYER LEVEL SYSTEM
+// ======================
+
+async function getPlayerLevel() {
+    try {
+        const user = auth.currentUser;
+        if (!user) return 1;
+        
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            return userData.level || userData.playerLevel || 1;
+        }
+        return 1;
+    } catch (error) {
+        console.error('Error getting player level:', error);
+        return 1;
+    }
+}
+
+function isItemAvailableForLevel(item, playerLevel) {
+    const itemLevel = item.minimumRequiredLevel || item.minLevel || 1;
+    
+    // RELAXED FILTERING: Show items within a wider range
+    // Allow items up to 15 levels above and 10 levels below player level
+    const maxAllowedLevel = playerLevel + 15;
+    const minAllowedLevel = Math.max(1, playerLevel - 10);
+    
+    return itemLevel <= maxAllowedLevel && itemLevel >= minAllowedLevel;
+}
+
+function getLevelRange(level) {
+    if (level <= 20) return 'beginner';
+    if (level <= 40) return 'intermediate';
+    return 'advanced';
+}
+
+// ======================
+// SILENT WEEKLY DEALS GENERATION (For Auto-rotation)
+// ======================
+
+async function generateWeeklyDealsSilent() {
+    console.log('🔄 Silently generating weekly deals...');
+    
+    try {
+        if (isGeneratingWeeklyDeals) {
+            console.log('⚠️ Weekly deals generation already in progress');
+            return;
+        }
+        
+        isGeneratingWeeklyDeals = true;
+        
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals) return;
+        
+        // Clear ALL existing weekly deals
+        const existingDealsQuery = query(
+            collection(db, "marketListings"),
+            where("marketType", "==", "weekly-deals")
+        );
+        const existingDealsSnapshot = await getDocs(existingDealsQuery);
+        
+        console.log(`🗑️ Clearing ${existingDealsSnapshot.size} existing weekly deals...`);
+        const deletePromises = [];
+        existingDealsSnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        
+        // Generate items - EXCLUDE TOKEN ITEMS
+        const shopItems = await getAllShopItems();
+        const eligibleItems = shopItems.filter(item => {
+            const hasGoldPrice = item.price_gold > 0;
+            const hasTokenPrice = item.tokenPrice && item.tokenPrice > 0;
+            
+            // BLOCK TOKEN ITEMS - only allow gold-priced items
+            return hasGoldPrice && !hasTokenPrice;
+        });
+        
+        console.log(`🛍️ Found ${eligibleItems.length} eligible items (NO TOKEN ITEMS)`);
+        
+        if (eligibleItems.length === 0) {
+            console.error('❌ No eligible items found for weekly deals');
+            return;
+        }
+        
+        // Take only 12-15 items total for the entire system
+        const selectedItems = selectRandomItems(eligibleItems, Math.min(15, eligibleItems.length));
+        
+        const weeklyDeals = [];
+        
+        selectedItems.forEach(item => {
+            const discountedItem = applyDiscountToItem(item, config.weeklyDeals.discountRange);
+            
+            // FORCE system seller
+            const weeklyDealData = {
+                itemType: discountedItem.itemType,
+                itemData: discountedItem.itemData,
+                sellerId: 'system',
+                sellerName: 'Weekly Deals',
+                price: discountedItem.price,
+                originalPrice: discountedItem.originalPrice,
+                tokenPrice: 0, // Ensure token price is 0
+                originalTokenPrice: 0,
+                marketType: 'weekly-deals',
+                discount: discountedItem.discount,
+                quantity: 1,
+                isSold: false,
+                views: 0,
+                likes: 0,
+                likedBy: []
+            };
+            
+            weeklyDeals.push(weeklyDealData);
+        });
+        
+        // Save all deals
+        console.log(`💾 Saving ${weeklyDeals.length} weekly deals as SYSTEM...`);
+        const dealIds = [];
+        for (const deal of weeklyDeals) {
+            const docRef = await addDoc(collection(db, "marketListings"), {
+                ...deal,
+                createdAt: serverTimestamp(),
+                expiresAt: getExpiryDate('weekly-deals')
+            });
+            if (docRef.id) dealIds.push(docRef.id);
+        }
+        
+        // Update config with system as generator
+        await updateDoc(doc(db, "marketConfig", "config"), {
+            "weeklyDeals.lastGenerated": serverTimestamp(),
+            "weeklyDeals.generatedBy": 'system'
+        });
+        
+        console.log(`✅ Silently generated ${dealIds.length} weekly deals (NO TOKEN ITEMS)`);
+        weeklyDealsGenerated = true;
+        
+    } catch (error) {
+        console.error('Error silently generating weekly deals:', error);
+    } finally {
+        isGeneratingWeeklyDeals = false;
+    }
+}
+
+
+// ======================
+// FIXED WEEKLY DEALS - NO AUTO GENERATION
+// ======================
+
+async function checkWeeklyDealsStatus() {
+    try {
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals) return;
+        
+        const existingDeals = await getMarketListings('weekly-deals');
+        console.log(`📊 Weekly Deals Status: ${existingDeals.length} deals available`);
+        
+    } catch (error) {
+        console.error('Error checking weekly deals status:', error);
+    }
+}
+
+window.generateWeeklyDealsManual = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        window.showCustomModal('error', 'Not Logged In', 'Please log in.');
+        return;
+    }
+    
+    console.log('🔄 Generating weekly deals (NO TOKEN ITEMS)...');
+    
+    try {
+        if (isGeneratingWeeklyDeals) {
+            window.showCustomModal('info', 'Generation in Progress', 'Weekly deals are already being generated.');
+            return;
+        }
+        
+        isGeneratingWeeklyDeals = true;
+        
+        const grid = document.getElementById('weekly-deals-grid');
+        if (grid) {
+            grid.innerHTML = '<div class="loading-message">Generating weekly deals...</div>';
+        }
+        
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals) return;
+        
+        // Clear ALL existing weekly deals
+        const existingDealsQuery = query(
+            collection(db, "marketListings"),
+            where("marketType", "==", "weekly-deals")
+        );
+        const existingDealsSnapshot = await getDocs(existingDealsQuery);
+        
+        console.log(`🗑️ Clearing ${existingDealsSnapshot.size} existing weekly deals...`);
+        const deletePromises = [];
+        existingDealsSnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        
+        // Generate items - EXCLUDE TOKEN ITEMS
+        const shopItems = await getAllShopItems();
+        const eligibleItems = shopItems.filter(item => {
+            const hasGoldPrice = item.price_gold > 0;
+            const hasTokenPrice = item.tokenPrice && item.tokenPrice > 0;
+            
+            // BLOCK TOKEN ITEMS - only allow gold-priced items
+            return hasGoldPrice && !hasTokenPrice;
+        });
+        
+        console.log(`🛍️ Found ${eligibleItems.length} eligible items (NO TOKEN ITEMS)`);
+        
+        if (eligibleItems.length === 0) {
+            window.showCustomModal('error', 'No Items Found', 'No gold-priced items found for weekly deals.');
+            return;
+        }
+        
+        // Take only 12-15 items total for the entire system
+        const selectedItems = selectRandomItems(eligibleItems, Math.min(15, eligibleItems.length));
+        
+        const weeklyDeals = [];
+        
+        selectedItems.forEach(item => {
+            const discountedItem = applyDiscountToItem(item, config.weeklyDeals.discountRange);
+            
+            // FORCE system seller
+            const weeklyDealData = {
+                itemType: discountedItem.itemType,
+                itemData: discountedItem.itemData,
+                sellerId: 'system',
+                sellerName: 'Weekly Deals',
+                price: discountedItem.price,
+                originalPrice: discountedItem.originalPrice,
+                tokenPrice: 0, // Ensure token price is 0
+                originalTokenPrice: 0,
+                marketType: 'weekly-deals',
+                discount: discountedItem.discount,
+                quantity: 1,
+                isSold: false,
+                views: 0,
+                likes: 0,
+                likedBy: []
+            };
+            
+            weeklyDeals.push(weeklyDealData);
+        });
+        
+        // Save all deals
+        console.log(`💾 Saving ${weeklyDeals.length} weekly deals as SYSTEM...`);
+        const dealIds = [];
+        for (const deal of weeklyDeals) {
+            const docRef = await addDoc(collection(db, "marketListings"), {
+                ...deal,
+                createdAt: serverTimestamp(),
+                expiresAt: getExpiryDate('weekly-deals')
+            });
+            if (docRef.id) dealIds.push(docRef.id);
+        }
+        
+        // Update config
+        await updateDoc(doc(db, "marketConfig", "config"), {
+            "weeklyDeals.lastGenerated": serverTimestamp(),
+            "weeklyDeals.generatedBy": user.uid
+        });
+        
+        console.log(`✅ Generated ${dealIds.length} weekly deals (NO TOKEN ITEMS)`);
+        window.showCustomModal('success', 'Weekly Deals Generated!', 
+            `Created ${dealIds.length} weekly deals!\n• No token items included\n• All items show "Weekly Deals" as seller`);
+        
+        await loadWeeklyDeals();
+        
+    } catch (error) {
+        console.error('Error generating weekly deals:', error);
+        window.showCustomModal('error', 'Generation Failed', error.message);
+    } finally {
+        isGeneratingWeeklyDeals = false;
+    }
+};
+
+async function shouldGenerateWeeklyDeals() {
+    try {
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals?.lastGenerated) return true;
+        
+        const lastGenerated = config.weeklyDeals.lastGenerated.toDate ? 
+            config.weeklyDeals.lastGenerated.toDate() : 
+            new Date(config.weeklyDeals.lastGenerated);
+            
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        
+        return lastGenerated < weekAgo;
+    } catch (error) {
+        console.error('Error checking weekly deals expiration:', error);
+        return false;
+    }
+}
+
+// ======================
+// MANUAL RESET FUNCTIONS (Console Only)
+// ======================
+
+window.manualResetWeeklyDeals = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.error('❌ Not logged in');
+        return;
+    }
+    
+    console.log('🔄 MANUAL RESET: Starting weekly deals reset...');
+    
+    try {
+        // Confirm reset
+        const confirmReset = confirm('🚨 MANUAL RESET: This will delete ALL weekly deals and generate new ones. Continue?');
+        if (!confirmReset) {
+            console.log('❌ Reset cancelled by user');
+            return;
+        }
+        
+        // 1. Delete all existing weekly deals
+        const weeklyDealsQuery = query(
+            collection(db, "marketListings"),
+            where("marketType", "==", "weekly-deals")
+        );
+        const weeklyDealsSnapshot = await getDocs(weeklyDealsQuery);
+        
+        console.log(`🗑️ Deleting ${weeklyDealsSnapshot.size} existing weekly deals...`);
+        const deletePromises = [];
+        weeklyDealsSnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        
+        // 2. Generate new weekly deals
+        await generateWeeklyDealsSilent();
+        
+        // 3. Verify the new deals
+        const newDeals = await getMarketListings('weekly-deals');
+        console.log(`✅ MANUAL RESET COMPLETE: Generated ${newDeals.length} new weekly deals`);
+        
+        // 4. Verify all sellers are "Weekly Deals"
+        let allCorrect = true;
+        for (const deal of newDeals) {
+            if (deal.sellerId !== 'system' || deal.sellerName !== 'Weekly Deals') {
+                console.error(`❌ Seller incorrect for: ${deal.itemData.name}`, {
+                    sellerId: deal.sellerId,
+                    sellerName: deal.sellerName
+                });
+                allCorrect = false;
+            }
+        }
+        
+        if (allCorrect) {
+            console.log('✅ ALL sellers correctly set to "Weekly Deals"');
+        } else {
+            console.log('⚠️ Some sellers may need manual correction');
+        }
+        
+        alert(`✅ MANUAL RESET COMPLETE!\nGenerated ${newDeals.length} weekly deals\nAll sellers set to "Weekly Deals"`);
+        
+    } catch (error) {
+        console.error('❌ Manual reset failed:', error);
+        alert('❌ Manual reset failed: ' + error.message);
+    }
+};
+
+// Quick status check function
+window.checkWeeklyDealsStatus = async function() {
+    try {
+        const listings = await getMarketListings('weekly-deals');
+        const config = await getMarketConfig();
+        
+        console.log('=== WEEKLY DEALS STATUS ===');
+        console.log(`📊 Total Listings: ${listings.length}`);
+        console.log(`🕒 Last Generated: ${config?.weeklyDeals?.lastGenerated ? config.weeklyDeals.lastGenerated.toDate().toLocaleString() : 'Never'}`);
+        console.log(`👤 Generated By: ${config?.weeklyDeals?.generatedBy || 'Unknown'}`);
+        
+        // Check sellers
+        const sellers = {};
+        listings.forEach(deal => {
+            const seller = deal.sellerName || 'Unknown';
+            sellers[seller] = (sellers[seller] || 0) + 1;
+        });
+        
+        console.log('🏪 Sellers Breakdown:', sellers);
+        
+        // Show sample of items
+        console.log('🎁 Sample Items:');
+        listings.slice(0, 5).forEach(deal => {
+            console.log(`   • ${deal.itemData.name} - ${deal.price}g - Seller: ${deal.sellerName}`);
+        });
+        
+    } catch (error) {
+        console.error('Error checking status:', error);
+    }
+};
+
+// ======================
+// AUTO ROTATION SYSTEM (Every 7 Days)
+// ======================
+
+async function checkAndRotateWeeklyDeals() {
+    try {
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals) return;
+        
+        const lastGenerated = config.weeklyDeals.lastGenerated;
+        if (!lastGenerated) {
+            console.log('🔄 No previous generation found, generating initial weekly deals...');
+            await generateWeeklyDealsSilent();
+            return;
+        }
+        
+        // Convert Firestore timestamp to Date
+        const lastGenDate = lastGenerated.toDate ? lastGenerated.toDate() : new Date(lastGenerated);
+        const now = new Date();
+        const daysSinceLastGen = (now - lastGenDate) / (1000 * 60 * 60 * 24);
+        
+        console.log(`📅 Weekly deals check: ${daysSinceLastGen.toFixed(1)} days since last generation`);
+        
+        if (daysSinceLastGen >= 7) {
+            console.log('🔄 7 days passed, rotating weekly deals...');
+            await generateWeeklyDealsSilent();
+        } else {
+            const daysLeft = 7 - daysSinceLastGen;
+            console.log(`⏳ Next rotation in: ${daysLeft.toFixed(1)} days`);
+        }
+        
+    } catch (error) {
+        console.error('Error checking weekly deals rotation:', error);
+    }
+}
+
+// ======================
+// FIXED INVENTORY SYSTEM
+// ======================
+
+async function getPlayerInventory() {
+    try {
+        const user = auth.currentUser;
+        if (!user) return [];
+        
+        console.log("🔄 Fetching player inventory for:", user.uid);
+        
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            console.log("❌ User document not found");
+            return [];
+        }
+        
+        const userData = userSnap.data();
+        const inventory = userData.inventory || [];
+        
+        console.log(`🎒 Loaded ${inventory.length} real player items`);
+        
+        // Return items with their actual IDs and all properties
+        return inventory.map(item => ({
+            ...item,
+            // Ensure we have the actual ID from the inventory array
+            actualId: item.id, // Store the actual ID for reference
+            displayId: item.id // Use for display
+        }));
+        
+    } catch (error) {
+        console.error('Error getting player inventory:', error);
+        return [];
+    }
+}
+
+async function removeItemFromPlayerInventory(itemId) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return false;
+        
+        console.log("📤 Removing item from inventory:", itemId);
+        
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            console.error("❌ User document not found");
+            return false;
+        }
+        
+        const userData = userSnap.data();
+        const currentInventory = userData.inventory || [];
+        
+        console.log("🔍 Looking for item ID in inventory:", itemId);
+        console.log("Current inventory items:", currentInventory.map(item => item.id));
+        
+        // Find the item by ID - use the actual ID from inventory
+        const itemIndex = currentInventory.findIndex(item => item.id === itemId);
+        
+        if (itemIndex === -1) {
+            console.error("❌ Item not found in inventory. Available IDs:", currentInventory.map(item => item.id));
+            return false;
+        }
+        
+        // Remove the item from array
+        const updatedInventory = currentInventory.filter(item => item.id !== itemId);
+        
+        await updateDoc(userRef, {
+            inventory: updatedInventory
+        });
+        
+        console.log("✅ Item removed from player inventory");
+        return true;
+        
+    } catch (error) {
+        console.error('Error removing item from inventory:', error);
+        return false;
+    }
+}
+
+async function unequipItemInInventory(itemId) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return false;
+        
+        console.log("🔧 Unequipping item:", itemId);
+        
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            console.error("❌ User document not found");
+            return false;
+        }
+        
+        const userData = userSnap.data();
+        const currentInventory = userData.inventory || [];
+        
+        // Find and unequip the item
+        const updatedInventory = currentInventory.map(item => {
+            if (item.id === itemId) {
+                return { ...item, equipped: false };
+            }
+            return item;
+        });
+        
+        await updateDoc(userRef, {
+            inventory: updatedInventory
+        });
+        
+        console.log("✅ Item unequipped");
+        return true;
+        
+    } catch (error) {
+        console.error('Error unequipping item:', error);
+        return false;
+    }
+}
+
+// Update the addItemToPlayerInventory function
+async function addItemToPlayerInventory(itemData) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return false;
+        
+        console.log("📥 Adding item to inventory:", itemData);
+        
+        // Get current user data
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            console.error("❌ User document not found");
+            return false;
+        }
+        
+        const userData = userSnap.data();
+        const currentInventory = userData.inventory || [];
+        
+        // Create the item with proper ID
+        const newItem = {
+            id: itemData.id || generateId(), // Use existing ID or generate new one
+            type: itemData.type || 'unknown',
+            name: itemData.name || 'Unknown Item',
+            equipped: false, // New items are not equipped by default
+            rarity: itemData.rarity || 'common',
+            stats: itemData.stats || {},
+            price_gold: itemData.price_gold || 0,
+            tokenPrice: itemData.tokenPrice || 0,
+            minimumRequiredLevel: itemData.minimumRequiredLevel || 1,
+            // Include any other relevant fields
+            ...itemData
+        };
+        
+        // Remove any undefined fields and the id field if it's from market (to avoid duplicates)
+        Object.keys(newItem).forEach(key => {
+            if (newItem[key] === undefined) {
+                delete newItem[key];
+            }
+        });
+        
+        // Ensure we don't have duplicate IDs in inventory
+        const existingIds = currentInventory.map(item => item.id);
+        if (existingIds.includes(newItem.id)) {
+            console.log("🔄 Item ID exists, generating new ID...");
+            newItem.id = generateId();
+        }
+        
+        // Add the new item to inventory array
+        const updatedInventory = [...currentInventory, newItem];
+        
+        // Update the user document
+        await updateDoc(userRef, {
+            inventory: updatedInventory
+        });
+        
+        console.log("✅ Item added to player inventory:", newItem);
+        return true;
+        
+    } catch (error) {
+        console.error('Error adding item to inventory:', error);
+        return false;
+    }
+}
+
+// ======================
+// FIXED MARKET DATA FUNCTIONS
+// ======================
+
+async function getMarketListings(marketType = 'all', filters = {}) {
+    try {
+        const playerLevel = await getPlayerLevel();
+        
+        let queryRef = collection(db, "marketListings");
+        let constraints = [where('isSold', '==', false)];
+        
+        if (marketType !== 'all') {
+            constraints.push(where('marketType', '==', marketType));
+        }
+        
+        // For team market, filter by player's team
+        if (marketType === 'team-market') {
+            const userTeam = await getPlayerTeam();
+            if (userTeam) {
+                constraints.push(where('sellerTeam', '==', userTeam));
+            } else {
+                // If user has no team, return empty array
+                return [];
+            }
+        }
+        
+        if (filters.itemType && filters.itemType !== 'all') {
+            constraints.push(where('itemType', '==', filters.itemType));
+        }
+        
+        if (filters.maxPrice && filters.maxPrice > 0) {
+            constraints.push(where('price', '<=', filters.maxPrice));
+        }
+        
+        if (filters.rarity && filters.rarity !== 'all') {
+            constraints.push(where('itemData.rarity', '==', filters.rarity));
+        }
+        
+        const q = query(queryRef, ...constraints);
+        const querySnapshot = await getDocs(q);
+        
+        const listings = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const listing = {
+                id: doc.id,
+                ...data,
+                likes: data.likes || 0,
+                views: data.views || 0,
+                likedBy: data.likedBy || []
+            };
+            
+            // ONLY apply level filtering to weekly deals!
+            if (marketType === 'weekly-deals') {
+                if (isItemAvailableForLevel(listing.itemData, playerLevel)) {
+                    listings.push(listing);
+                }
+            } else {
+                // Player market and team market - NO level restrictions!
+                listings.push(listing);
+            }
+        });
+        
+        console.log(`📊 Loaded ${listings.length} ${marketType} listings${marketType === 'weekly-deals' ? ` for level ${playerLevel}` : ''}`);
+        return listings;
+    } catch (error) {
+        console.error('Error getting market listings:', error);
+        return [];
+    }
+}
+
+async function createMarketListing(listingData) {
+    try {
+        const user = auth.currentUser;
+        if (!user) return null;
+        
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        const validatedData = {
+            itemType: listingData.itemType || 'unknown',
+            itemData: listingData.itemData,
+            sellerId: user.uid,
+            sellerName: userData.username || userData.displayName || 'Unknown Seller',
+            price: listingData.price || 0,
+            originalPrice: listingData.originalPrice || listingData.price || 0,
+            tokenPrice: listingData.tokenPrice || 0,
+            originalTokenPrice: listingData.originalTokenPrice || listingData.tokenPrice || 0,
+            marketType: listingData.marketType || 'player',
+            sellerTeam: listingData.sellerTeam || null,
+            discount: listingData.discount || 0,
+            quantity: listingData.quantity || 1,
+            createdAt: serverTimestamp(),
+            expiresAt: listingData.expiresAt || getExpiryDate(listingData.marketType),
+            isSold: false,
+            views: 0,
+            likes: 0,
+            likedBy: []
+        };
+        
+        console.log('📝 Creating market listing:', validatedData);
+        
+        const docRef = await addDoc(collection(db, "marketListings"), validatedData);
+        console.log('✅ Listing created:', docRef.id);
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating market listing:', error);
+        return null;
+    }
+}
+
+
+// ======================
+// FIXED PURCHASE SYSTEM (No writeBatch)
+// ======================
+
+window.buyMarketItem = async function(listingId) {
+    console.log('🛒 Buying item:', listingId);
+    
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            window.showCustomModal('error', 'Not Logged In', 'Please log in to buy items.');
+            return;
+        }
+
+        const listingDoc = await getDoc(doc(db, "marketListings", listingId));
+        if (!listingDoc.exists()) {
+            window.showCustomModal('error', 'Item Not Found', 'This item is no longer available.');
+            return;
+        }
+
+        const listing = { id: listingDoc.id, ...listingDoc.data() };
+        
+        if (listing.isSold) {
+            window.showCustomModal('error', 'Already Sold', 'This item has already been sold.');
+            return;
+        }
+
+        if (listing.sellerId === user.uid) {
+            window.showCustomModal('error', 'Cannot Buy Own Item', 'You cannot buy your own listings.');
+            return;
+        }
+
+        // CHECK LEVEL REQUIREMENT FOR ALL MARKETS
+        const playerLevel = await getPlayerLevel();
+        const itemLevel = listing.itemData.minimumRequiredLevel || 1;
+        
+        if (playerLevel < itemLevel) {
+            window.showCustomModal('error', 'Level Requirement', 
+                `You need to be level ${itemLevel} to purchase this item. Your level: ${playerLevel}`);
+            return;
+        }
+
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        if (!userData) {
+            window.showCustomModal('error', 'User Data Error', 'Could not load your user data.');
+            return;
+        }
+        
+        // Check if item costs tokens or gold
+        const itemCostsTokens = listing.tokenPrice && listing.tokenPrice > 0;
+        const price = itemCostsTokens ? listing.tokenPrice : listing.price;
+        const currencyType = itemCostsTokens ? 'tokens' : 'gold';
+        const userBalance = itemCostsTokens ? (userData.tokens || 0) : (userData.gold || 0);
+        
+        console.log(`💰 Purchase check: ${price} ${currencyType}, User has: ${userBalance}`);
+        
+        if (userBalance < price) {
+            const currencyName = itemCostsTokens ? 'tokens' : 'gold';
+            window.showCustomModal('error', `Insufficient ${currencyName}`, 
+                `You need ${price} ${currencyName}. You have ${userBalance} ${currencyName}.`);
+            return;
+        }
+
+        let sellerData = null;
+        if (listing.sellerId !== 'system') {
+            const sellerDoc = await getDoc(doc(db, "users", listing.sellerId));
+            sellerData = sellerDoc.data();
+        }
+
+        const currencySymbol = itemCostsTokens ? '🔹' : '💰';
+        const sellerName = listing.sellerId === 'system' ? 'Weekly Deals' : listing.sellerName;
+        
+        const confirm = await window.showCustomConfirm(
+            `Buy ${listing.itemData.name}?`,
+            'Confirm Purchase',
+            `Seller: ${sellerName}\nPrice: ${currencySymbol} ${price} ${currencyType}\nLevel Required: ${itemLevel}\nYour Level: ${playerLevel}\n\nYou will receive the item immediately.`
+        );
+
+        if (confirm) {
+            await processMarketPurchase(listing, user.uid, userData, sellerData, itemCostsTokens);
+        }
+
+    } catch (error) {
+        console.error('Error buying item:', error);
+        window.showCustomModal('error', 'Purchase Failed', error.message);
+    }
+};
+
+async function processMarketPurchase(listing, buyerId, buyerData, sellerData, itemCostsTokens) {
+    try {
+        const price = itemCostsTokens ? listing.tokenPrice : listing.price;
+        const currencyType = itemCostsTokens ? 'tokens' : 'gold';
+        const isSystemSale = listing.sellerId === 'system';
+        
+        let feeAmount = 0;
+        let sellerEarnings = price;
+        
+        if (!isSystemSale) {
+            const config = await getMarketConfig();
+            
+            if (itemCostsTokens) {
+                const tokenFeeRate = 0.02;
+                feeAmount = Math.floor(price * tokenFeeRate);
+                sellerEarnings = price - feeAmount;
+            } else {
+                const feeRate = listing.marketType === 'team-market' ? 
+                    config.fees.teamMarketFee : config.fees.playerMarketFee;
+                feeAmount = Math.floor(price * feeRate);
+                sellerEarnings = price - feeAmount;
+            }
+        }
+        
+        // 1. Mark item as sold
+        await updateDoc(doc(db, "marketListings", listing.id), {
+            isSold: true,
+            soldAt: serverTimestamp(),
+            buyerId: buyerId,
+            buyerName: buyerData.username || buyerData.displayName || 'Unknown Buyer'
+        });
+        
+        // 2. Deduct from buyer
+        if (itemCostsTokens) {
+            await updateDoc(doc(db, "users", buyerId), {
+                tokens: (buyerData.tokens || 0) - price
+            });
+        } else {
+            await updateDoc(doc(db, "users", buyerId), {
+                gold: (buyerData.gold || 0) - price
+            });
+        }
+        
+        // 3. Pay seller
+        if (!isSystemSale && sellerData) {
+            if (itemCostsTokens) {
+                await updateDoc(doc(db, "users", listing.sellerId), {
+                    tokens: (sellerData.tokens || 0) + sellerEarnings
+                });
+            } else {
+                await updateDoc(doc(db, "users", listing.sellerId), {
+                    gold: (sellerData.gold || 0) + sellerEarnings
+                });
+            }
+        }
+        
+        // 4. Add to buyer's inventory - use the itemData from the listing
+        const itemToAdd = {
+            ...listing.itemData,
+            acquiredFrom: 'market',
+            acquiredAt: new Date(),
+            previousOwner: listing.sellerName,
+            purchasePrice: price,
+            purchaseCurrency: currencyType,
+            wasWeeklyDeal: listing.marketType === 'weekly-deals'
+        };
+        
+        // Remove any market-specific fields that shouldn't be in inventory
+        delete itemToAdd.sellerTeam;
+        delete itemToAdd.marketType;
+        delete itemToAdd.isSold;
+        
+        const success = await addItemToPlayerInventory(itemToAdd);
+        
+        if (!success) {
+            throw new Error('Failed to add item to inventory');
+        }
+        
+        console.log(`✅ Purchase completed: ${buyerData.username} bought ${listing.itemData.name} for ${price} ${currencyType}`);
+        
+        // Notifications
+        const sellerName = isSystemSale ? 'Weekly Deals' : listing.sellerName;
+        
+        if (typeof window.createNotification === 'function') {
+            if (!isSystemSale) {
+                await window.createNotification(listing.sellerId, 
+                    itemCostsTokens ? 
+                        `💎 Your ${listing.itemData.name} sold for ${sellerEarnings} tokens! (After ${feeAmount} token fee)` :
+                        `💰 Your ${listing.itemData.name} sold for ${sellerEarnings} gold! (After ${feeAmount}g fee)`,
+                    'market_sale'
+                );
+            }
+            
+            await window.createNotification(buyerId,
+                `📦 You purchased ${listing.itemData.name} from ${sellerName} for ${price} ${currencyType}!`,
+                'market_purchase'
+            );
+        }
+        
+        const successMessage = itemCostsTokens ? 
+            `You bought ${listing.itemData.name} for ${price} tokens. The item has been added to your inventory.` :
+            `You bought ${listing.itemData.name} for ${price} gold. The item has been added to your inventory.`;
+            
+        window.showCustomModal('success', 'Purchase Successful!', successMessage);
+        
+        refreshActiveMarketTab();
+        
+    } catch (error) {
+        console.error('Error processing purchase:', error);
+        throw new Error('Failed to complete purchase: ' + error.message);
+    }
+}
+
+// ========== FIXED INCREMENT VIEWS ==========
+async function incrementListingViews(listingId) {
+    try {
+        const listingRef = doc(db, "marketListings", listingId);
+        const listingDoc = await getDoc(listingRef);
+        
+        if (listingDoc.exists()) {
+            const currentViews = listingDoc.data().views || 0;
+            await updateDoc(listingRef, {
+                views: currentViews + 1
+            });
+        }
+    } catch (error) {
+        console.error('Error incrementing views:', error);
+    }
+}
+
+// ======================
+// FIXED LIKE SYSTEM
+// ======================
+
+window.toggleItemLike = async function(listingId) {
+    const user = auth.currentUser;
+    if (!user) {
+        window.showCustomModal('error', 'Not Logged In', 'Please log in to like items.');
+        return;
+    }
+    
+    try {
+        const listingRef = doc(db, "marketListings", listingId);
+        const listingDoc = await getDoc(listingRef);
+        
+        if (!listingDoc.exists()) {
+            console.error('Listing not found:', listingId);
+            return;
+        }
+        
+        const listing = listingDoc.data();
+        const likedBy = listing.likedBy || [];
+        const isLiked = likedBy.includes(user.uid);
+        
+        // Update UI immediately
+        const likeBtn = document.querySelector(`[data-listing-id="${listingId}"] .like-btn`);
+        if (likeBtn) {
+            likeBtn.classList.toggle('liked', !isLiked);
+            likeBtn.textContent = isLiked ? '💖 Like' : '💔 Unlike';
+            
+            const likesDisplay = likeBtn.closest('.item-engagement').querySelector('.engagement-item:nth-child(2)');
+            if (likesDisplay) {
+                const currentLikes = parseInt(likesDisplay.textContent.replace('❤️ ', '')) || 0;
+                const newLikes = isLiked ? currentLikes - 1 : currentLikes + 1;
+                likesDisplay.textContent = `❤️ ${newLikes}`;
+            }
+        }
+        
+        // Update database
+        let newLikes = listing.likes || 0;
+        let newLikedBy = [...likedBy];
+        
+        if (isLiked) {
+            const index = newLikedBy.indexOf(user.uid);
+            if (index > -1) {
+                newLikedBy.splice(index, 1);
+                newLikes = Math.max(0, newLikes - 1);
+            }
+        } else {
+            newLikedBy.push(user.uid);
+            newLikes += 1;
+        }
+        
+        await updateDoc(listingRef, {
+            likes: newLikes,
+            likedBy: newLikedBy
+        });
+        
+        console.log(`❤️ ${isLiked ? 'Unliked' : 'Liked'} listing ${listingId}. Likes: ${newLikes}`);
+        
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        window.showCustomModal('error', 'Like Failed', 'Could not update like status.');
+    }
+};
+
+// ======================
+// FIXED REAL-TIME UPDATES
+// ======================
+
+function setupMarketRealTimeListener() {
+    cleanupMarketListeners();
+    
+    console.log('🔔 Setting up real-time market listeners...');
+    
+    // Listen for all market changes
+    const marketQuery = query(
+        collection(db, "marketListings"),
+        where("isSold", "==", false)
+    );
+    
+    const marketUnsubscribe = onSnapshot(marketQuery, (snapshot) => {
+        let needsRefresh = false;
+        
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added' || change.type === 'modified' || change.type === 'removed') {
+                console.log('🔄 Market update detected:', change.type);
+                needsRefresh = true;
+            }
+        });
+        
+        if (needsRefresh) {
+            refreshActiveMarketTab();
+        }
+    });
+    activeListeners.add(marketUnsubscribe);
+}
+
+function cleanupMarketListeners() {
+    activeListeners.forEach(unsubscribe => {
+        try {
+            unsubscribe();
+        } catch (error) {
+            console.error('Error cleaning up listener:', error);
+        }
+    });
+    activeListeners.clear();
+}
+
+function refreshActiveMarketTab() {
+    const activeTab = document.querySelector('.market-tab.active');
+    if (activeTab) {
+        const tabName = activeTab.getAttribute('data-market-tab');
+        console.log(`🔄 Refreshing ${tabName} tab`);
+        
+        clearTimeout(window.marketRefreshTimeout);
+        window.marketRefreshTimeout = setTimeout(() => {
+            loadTabContent(tabName);
+        }, 300);
+    }
+}
+
+// Force refresh weekly deals (for testing/deployment)
+window.refreshWeeklyDeals = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        window.showCustomModal('error', 'Not Logged In', 'Please log in to refresh weekly deals.');
+        return;
+    }
+    
+    try {
+        console.log('🔄 Force refreshing weekly deals...');
+        
+        // Clear ALL existing weekly deals
+        const existingDealsQuery = query(
+            collection(db, "marketListings"),
+            where("marketType", "==", "weekly-deals")
+        );
+        const existingDealsSnapshot = await getDocs(existingDealsQuery);
+        
+        console.log(`🗑️ Clearing ${existingDealsSnapshot.size} existing weekly deals...`);
+        const deletePromises = [];
+        existingDealsSnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        
+        // Generate new weekly deals with MORE items
+        const config = await getMarketConfig();
+        const shopItems = await getAllShopItems();
+        const eligibleItems = shopItems.filter(item => {
+            const hasPrice = item.price_gold > 0 || (item.tokenPrice && item.tokenPrice > 0);
+            return hasPrice;
+        });
+        
+        console.log(`🛍️ Found ${eligibleItems.length} eligible items for weekly deals`);
+        
+        const byType = {};
+        eligibleItems.forEach(item => {
+            const type = item.collection || item.type || 'unknown';
+            if (config.weeklyDeals.categories.includes(type)) {
+                if (!byType[type]) byType[type] = [];
+                byType[type].push(item);
+            }
+        });
+        
+        const weeklyDeals = [];
+        const usedItemIds = new Set();
+        
+        // Generate LOTS of items - increased numbers
+        for (const category of config.weeklyDeals.categories) {
+            const items = byType[category] || [];
+            console.log(`📦 ${category}: ${items.length} items available`);
+            
+            if (items.length === 0) continue;
+            
+            const availableItems = items.filter(item => !usedItemIds.has(item.id));
+            if (availableItems.length === 0) continue;
+            
+            // Select 10 items per category for maximum variety
+            const count = Math.min(10, availableItems.length);
+            const selected = selectRandomItems(availableItems, count);
+            
+            console.log(`🎯 Selected ${selected.length} ${category} items`);
+            
+            selected.forEach(item => {
+                usedItemIds.add(item.id);
+                const discountedItem = applyDiscountToItem(item, config.weeklyDeals.discountRange);
+                weeklyDeals.push(discountedItem);
+            });
+        }
+        
+        // Save all deals
+        console.log(`💾 Saving ${weeklyDeals.length} weekly deals...`);
+        const dealIds = [];
+        for (const deal of weeklyDeals) {
+            const listingId = await createMarketListing(deal);
+            if (listingId) dealIds.push(listingId);
+        }
+        
+        // Update config
+        await updateDoc(doc(db, "marketConfig", "config"), {
+            "weeklyDeals.lastGenerated": serverTimestamp(),
+            "weeklyDeals.generatedBy": user.uid
+        });
+        
+        console.log(`✅ Generated ${dealIds.length} new weekly deals!`);
+        
+        window.showCustomModal('success', 'Weekly Deals Refreshed!', 
+            `Successfully created ${dealIds.length} new weekly deals! All players will see appropriate items for their level.`);
+        
+        // Reload the display
+        await loadWeeklyDeals();
+        
+    } catch (error) {
+        console.error('Error refreshing weekly deals:', error);
+        window.showCustomModal('error', 'Refresh Failed', error.message);
+    }
+};
+
+// Quick function to check weekly deals status
+window.checkWeeklyDealsStatus = async function() {
+    try {
+        const listings = await getMarketListings('weekly-deals');
+        console.log(`📊 Weekly Deals Status: ${listings.length} deals available`);
+        
+        if (listings.length === 0) {
+            console.log('❌ No weekly deals found - need to generate them');
+            return false;
+        }
+        
+        listings.forEach(listing => {
+            console.log(`🏷️ ${listing.itemData.name} - Level ${listing.itemData.minimumRequiredLevel || 1} - ${listing.price}g`);
+        });
+        
+        return true;
+    } catch (error) {
+        console.error('Error checking weekly deals:', error);
+        return false;
+    }
+};
+
+// ======================
+// DISPLAY FUNCTIONS
+// ======================
+
+function initializeMarketDisplay() {
+    console.log('🖥️ Initializing market display...');
+    setupMarketTabs();
+    setupMarketRealTimeListener();
+    loadWeeklyDeals();
+    
+    // Initially hide all tabs first
+    document.querySelectorAll('.market-tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    
+    // Then show the default tab
+    setTimeout(() => {
+        switchMarketTab('weekly-deals');
+    }, 100);
+}
+
+function setupMarketTabs() {
+    const tabs = document.querySelectorAll('.market-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-market-tab');
+            switchMarketTab(tabName);
+        });
+    });
+}
+
+function switchMarketTab(tabName) {
+    console.log('🔄 Switching to tab:', tabName);
+    
+    // Hide all tab contents
+    document.querySelectorAll('.market-tab-content').forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.market-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    const activeTab = document.getElementById(`${tabName}-tab`);
+    if (activeTab) {
+        activeTab.style.display = 'block';
+        activeTab.classList.add('active');
+    }
+    
+    // Activate selected tab button
+    const activeTabBtn = document.querySelector(`[data-market-tab="${tabName}"]`);
+    if (activeTabBtn) {
+        activeTabBtn.classList.add('active');
+    }
+    
+    // Load content
+    loadTabContent(tabName);
+}
+
+function loadTabContent(tabName) {
+    switch(tabName) {
+        case 'weekly-deals':
+            loadWeeklyDeals();
+            break;
+        case 'player-market':
+            loadPlayerMarket();
+            break;
+        case 'team-market':
+            loadTeamMarket();
+            break;
+        case 'my-listings':
+            loadMyListings();
+            break;
+    }
+}
+
+// ======================
+// TEAM SYSTEM FUNCTIONS
+// ======================
+
+async function getPlayerTeam() {
+    try {
+        const user = auth.currentUser;
+        if (!user) return null;
+        
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            return userData.team || userData.teamId || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting player team:', error);
+        return null;
+    }
+}
+
+async function getTeamInfo(teamId) {
+    try {
+        if (!teamId) return null;
+        
+        const teamDoc = await getDoc(doc(db, "teams", teamId));
+        if (teamDoc.exists()) {
+            return { id: teamDoc.id, ...teamDoc.data() };
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting team info:', error);
+        return null;
+    }
+}
+
+async function isInTeam() {
+    const teamId = await getPlayerTeam();
+    return teamId !== null;
+}
+
+async function getTeamMembers(teamId) {
+    try {
+        if (!teamId) return [];
+        
+        const usersQuery = query(
+            collection(db, "users"),
+            where("team", "==", teamId)
+        );
+        const querySnapshot = await getDocs(usersQuery);
+        
+        const members = [];
+        querySnapshot.forEach((doc) => {
+            members.push({ id: doc.id, ...doc.data() });
+        });
+        
+        return members;
+    } catch (error) {
+        console.error('Error getting team members:', error);
+        return [];
+    }
+}
+
+window.loadWeeklyDeals = async function() {
+    console.log('📦 Loading weekly deals...');
+    const grid = document.getElementById('weekly-deals-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '<div class="loading-message">Loading weekly deals for your level...</div>';
+    
+    try {
+        const playerLevel = await getPlayerLevel();
+        const listings = await getMarketListings('weekly-deals');
+        
+        console.log(`📊 Displaying ${listings.length} weekly deals for level ${playerLevel}`);
+        
+        if (listings.length === 0) {
+            grid.innerHTML = `
+                <div class="loading-message">
+                    <div style="margin-bottom: 15px;">🎁 No weekly deals available for your level (${playerLevel})!</div>
+                    <div style="margin-top: 10px; font-size: 0.9rem; color: #888;">
+                        Check back later for new weekly deals!
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        displayListings(grid, listings, 'weekly-deals');
+        updateWeeklyDealsTimer();
+        
+    } catch (error) {
+        console.error('Error loading weekly deals:', error);
+        grid.innerHTML = '<div class="loading-message">Error loading weekly deals</div>';
+    }
+};
+
+async function loadPlayerMarket() {
+    const grid = document.getElementById('player-market-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '<div class="loading-message">Loading player market items...</div>';
+    
+    try {
+        const playerLevel = await getPlayerLevel();
+        window.currentPlayerLevel = playerLevel; // Store for display
+        
+        const listings = await getMarketListings('player');
+        console.log(`🛒 Loaded ${listings.length} player market items for level ${playerLevel}`);
+        displayListings(grid, listings, 'player');
+    } catch (error) {
+        console.error('Error loading player market:', error);
+        grid.innerHTML = '<div class="loading-message">Error loading player market</div>';
+    }
+}
+
+async function loadTeamMarket() {
+    const grid = document.getElementById('team-market-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '<div class="loading-message">Loading team market items...</div>';
+    
+    try {
+        const userTeam = await getPlayerTeam();
+        const playerLevel = await getPlayerLevel();
+        window.currentPlayerLevel = playerLevel; // Store for display
+        
+        if (!userTeam) {
+            grid.innerHTML = `
+                <div class="loading-message">
+                    <h3>🔒 Team Market Locked</h3>
+                    <p>You need to be in a team to access the team market.</p>
+                    <p>Join or create a team to trade items with your teammates!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const teamInfo = await getTeamInfo(userTeam);
+        const listings = await getMarketListings('team-market');
+        
+        console.log(`📊 Loaded ${listings.length} team market items for team: ${teamInfo?.name || userTeam}`);
+        
+        if (listings.length === 0) {
+            grid.innerHTML = `
+                <div class="loading-message">
+                    <h3>🏪 ${teamInfo?.name || 'Your Team'} Market</h3>
+                    <p>No items available in your team market yet.</p>
+                    <p>Be the first to list an item for your teammates!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        displayListings(grid, listings, 'team');
+        
+    } catch (error) {
+        console.error('Error loading team market:', error);
+        grid.innerHTML = '<div class="loading-message">Error loading team market</div>';
+    }
+}
+
+async function loadMyListings() {
+    const grid = document.getElementById('my-listings-grid');
+    if (!grid) return;
+    
+    // Use the original HTML structure - no custom styling
+    grid.innerHTML = `
+        <div class="my-listings-header">
+            <h3>Your Active Listings</h3>
+            <button class="create-listing-btn" onclick="openCreateListingModal()">
+                📝 Create New Listing
+            </button>
+        </div>
+        <div class="loading-message">Loading your listings...</div>
+    `;
+    
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            grid.innerHTML = '<div class="loading-message">Please log in to view your listings</div>';
+            return;
+        }
+        
+        const allListings = await getMarketListings('all');
+        const myListings = allListings.filter(listing => listing.sellerId === user.uid && !listing.isSold);
+        
+        if (myListings.length === 0) {
+            grid.innerHTML = `
+                <div class="my-listings-header">
+                    <h3>Your Active Listings</h3>
+                    <button class="create-listing-btn" onclick="openCreateListingModal()">
+                        📝 Create New Listing
+                    </button>
+                </div>
+                <div class="no-listings-message">
+                    <p>You don't have any active listings yet.</p>
+                    <p>Click "Create New Listing" to sell items from your inventory!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const listingsGrid = document.createElement('div');
+        listingsGrid.className = 'market-grid';
+        displayListings(listingsGrid, myListings, 'my');
+        
+        grid.innerHTML = `
+            <div class="my-listings-header">
+                <h3>Your Active Listings (${myListings.length})</h3>
+                <button class="create-listing-btn" onclick="openCreateListingModal()">
+                    📝 Create New Listing
+                </button>
+            </div>
+        `;
+        grid.appendChild(listingsGrid);
+        
+    } catch (error) {
+        console.error('Error loading my listings:', error);
+        grid.innerHTML = '<div class="loading-message">Error loading your listings</div>';
+    }
+}
+
+// ======================
+// CREATE LISTING SYSTEM
+// ======================
+
+window.openCreateListingModal = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        window.showCustomModal('error', 'Not Logged In', 'Please log in to create listings.');
+        return;
+    }
+    
+    try {
+        // Get player team status
+        const userTeam = await getPlayerTeam();
+        const canUseTeamMarket = userTeam !== null;
+        
+        // Get ACTUAL player inventory
+        const inventoryItems = await getPlayerInventory();
+        
+        console.log("📦 Real inventory items for listing:", inventoryItems);
+        
+        if (inventoryItems.length === 0) {
+            window.showCustomModal('error', 'Empty Inventory', 'You have no items in your inventory to sell.');
+            return;
+        }
+        
+        // Group items by type (simple version)
+        const itemsByType = {};
+        inventoryItems.forEach(item => {
+            const type = item.type || 'other';
+            if (!itemsByType[type]) itemsByType[type] = [];
+            itemsByType[type].push(item);
+        });
+        
+        const modalContent = `
+            <div class="create-listing-modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">📝 Create New Listing</h3>
+                    <button onclick="closeCreateListingModal()" style="background: none; border: none; color: #ff6b35; font-size: 1.5rem; cursor: pointer;">×</button>
+                </div>
+                
+                ${!canUseTeamMarket ? `
+                    <div style="background: #2a2a3a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #ffa726;">
+                        <strong>💡 Team Market Access</strong>
+                        <p style="margin: 5px 0 0 0; font-size: 0.9rem;">Join a team to access the team market with lower fees (2%)!</p>
+                    </div>
+                ` : ''}
+                
+                <!-- Simple Category Tabs -->
+                <div style="display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap;">
+                    ${Object.entries(itemsByType).map(([type, items]) => 
+                        items.length > 0 ? `
+                            <button class="category-tab ${type === Object.keys(itemsByType)[0] ? 'active' : ''}" 
+                                    data-category="${type}" 
+                                    onclick="switchInventoryCategory('${type}')"
+                                    style="padding: 8px 12px; background: #2a2a3a; border: 1px solid #444; border-radius: 4px; color: #fff; cursor: pointer;">
+                                ${getCategoryIcon(type)} ${type} (${items.length})
+                            </button>
+                        ` : ''
+                    ).join('')}
+                </div>
+                
+                <!-- Item Grid -->
+                <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                    <div class="inventory-grid" id="inventory-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
+                        ${renderInventoryGrid(itemsByType[Object.keys(itemsByType)[0]])}
+                    </div>
+                </div>
+                
+                <!-- Selected Item Preview -->
+                <div id="selected-item-preview" style="display: none; background: #2a2a3a; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0;">Selected Item:</h4>
+                    <div id="preview-content"></div>
+                </div>
+                
+                <!-- Listing Form -->
+                <div id="listing-form" style="display: none;">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px;">Market Type:</label>
+                        <select id="listing-market-type" style="width: 100%; padding: 8px; background: #2a2a3a; border: 1px solid #444; border-radius: 4px; color: #fff;">
+                            <option value="player">Player Market (5% fee)</option>
+                            ${canUseTeamMarket ? `<option value="team-market">Team Market (2% fee)</option>` : ''}
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px;">Price Type:</label>
+                        <select id="listing-currency-type" style="width: 100%; padding: 8px; background: #2a2a3a; border: 1px solid #444; border-radius: 4px; color: #fff;">
+                            <option value="gold">Gold</option>
+                            <option value="tokens">Tokens</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px;">Price:</label>
+                        <input type="number" id="listing-price" min="1" placeholder="Enter price..." 
+                               style="width: 100%; padding: 8px; background: #2a2a3a; border: 1px solid #444; border-radius: 4px; color: #fff;">
+                        <div id="price-validation" style="display: none; color: #ff6b6b; font-size: 0.8rem; margin-top: 5px;"></div>
+                        <div id="equipped-warning" style="display: none; color: #ffa726; font-size: 0.8rem; margin-top: 5px;"></div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="closeCreateListingModal()" 
+                                style="flex: 1; padding: 10px; background: #6c757d; border: none; border-radius: 4px; color: white; cursor: pointer;">Cancel</button>
+                        <button onclick="createPlayerListing()" id="create-listing-btn" disabled
+                                style="flex: 1; padding: 10px; background: #28a745; border: none; border-radius: 4px; color: white; cursor: pointer; opacity: 0.6;">Create Listing</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        window.showCustomModal('info', '', modalContent, true);
+        
+        window.listingModalData = {
+            itemsByType: itemsByType,
+            selectedItem: null,
+            userTeam: userTeam,
+            canUseTeamMarket: canUseTeamMarket
+        };
+        
+    } catch (error) {
+        console.error('Error opening create listing modal:', error);
+        window.showCustomModal('error', 'Error', 'Failed to load your inventory.');
+    }
+};
+
+window.createPlayerListing = async function() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    try {
+        if (!window.listingModalData || !window.listingModalData.selectedItem) {
+            window.showCustomModal('error', 'No Item Selected', 'Please select an item from your inventory.');
+            return;
+        }
+        
+        const selectedItem = window.listingModalData.selectedItem;
+        const marketType = document.getElementById('listing-market-type').value;
+        const currencyType = document.getElementById('listing-currency-type').value;
+        const price = parseInt(document.getElementById('listing-price').value);
+        
+        // Validate team market access
+        if (marketType === 'team-market' && !window.listingModalData.userTeam) {
+            window.showCustomModal('error', 'Team Market Access Denied', 'You need to be in a team to list items in the team market.');
+            return;
+        }
+        
+        if (!price || price < 1) {
+            window.showCustomModal('error', 'Invalid Price', 'Please enter a valid price (minimum 1).');
+            return;
+        }
+        
+        // Get user data
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        
+        // Price validation
+        const config = await getMarketConfig();
+        const minPricePercentage = config.priceControls?.minPricePercentage || 0.3;
+        
+        let originalValue = 0;
+        if (currencyType === 'gold') {
+            originalValue = selectedItem.price_gold || 0;
+        } else {
+            originalValue = selectedItem.tokenPrice || 0;
+        }
+        
+        const minAllowedPrice = Math.floor(originalValue * minPricePercentage);
+        if (price < minAllowedPrice) {
+            window.showCustomModal('error', 'Price Too Low', 
+                `You cannot sell this item for less than ${minAllowedPrice} ${currencyType} (${minPricePercentage * 100}% of original value).`);
+            return;
+        }
+        
+        // Token item validation
+        if (config.priceControls?.tokenItemsRequireTokens) {
+            const isTokenItem = selectedItem.tokenPrice && selectedItem.tokenPrice > 0;
+            if (isTokenItem && currencyType !== 'tokens') {
+                window.showCustomModal('error', 'Invalid Currency', 'Token items can only be sold for tokens.');
+                return;
+            }
+        }
+        
+        // Check listing fee
+        const listingFee = config.fees.listingFee || 50;
+        if (!userData || userData.gold < listingFee) {
+            window.showCustomModal('error', 'Insufficient Gold', 
+                `You need ${listingFee} gold to create a listing. You have ${userData?.gold || 0} gold.`);
+            return;
+        }
+        
+        const confirm = await window.showCustomConfirm(
+            'Create Listing?',
+            'Confirm Listing Creation',
+            `Item: ${selectedItem.name}\nMarket: ${marketType === 'player' ? 'Player Market' : 'Team Market'}\nPrice: ${price} ${currencyType}\nListing Fee: ${listingFee} gold\n\nThis will remove the item from your inventory and list it for sale.`
+        );
+        
+        if (!confirm) return;
+        
+        // If item is equipped, unequip it first
+        if (selectedItem.equipped) {
+            const unequipSuccess = await unequipItemInInventory(selectedItem.id);
+            if (!unequipSuccess) {
+                window.showCustomModal('error', 'Unequip Failed', 'Could not unequip the item. Please try again.');
+                return;
+            }
+        }
+        
+        // Create listing data
+        const listingData = {
+            itemType: selectedItem.type || 'unknown',
+            itemData: selectedItem,
+            sellerId: user.uid,
+            sellerName: userData.username || userData.displayName || 'Unknown Player',
+            marketType: marketType,
+            sellerTeam: marketType === 'team-market' ? window.listingModalData.userTeam : null,
+            quantity: 1
+        };
+        
+        if (currencyType === 'gold') {
+            listingData.price = price;
+            listingData.originalPrice = selectedItem.price_gold || price;
+        } else {
+            listingData.tokenPrice = price;
+            listingData.originalTokenPrice = selectedItem.tokenPrice || price;
+        }
+        
+        // Remove from inventory
+        const removeSuccess = await removeItemFromPlayerInventory(selectedItem.id);
+        if (!removeSuccess) {
+            window.showCustomModal('error', 'Inventory Error', 'Could not remove item from inventory. Please try again.');
+            return;
+        }
+        
+        // Deduct listing fee
+        await updateDoc(doc(db, "users", user.uid), {
+            gold: userData.gold - listingFee
+        });
+        
+        // Create market listing
+        const listingId = await createMarketListing(listingData);
+        
+        if (listingId) {
+            window.showCustomModal('success', 'Listing Created!', 
+                `Your ${selectedItem.name} has been listed for ${price} ${currencyType}!`);
+            
+            closeCreateListingModal();
+            loadMyListings();
+        } else {
+            throw new Error('Failed to create listing document');
+        }
+        
+    } catch (error) {
+        console.error('Error creating listing:', error);
+        window.showCustomModal('error', 'Listing Failed', error.message || 'Failed to create listing.');
+    }
+};
+
+// Close create listing modal
+window.closeCreateListingModal = function() {
+    // Use your existing modal close function
+    if (typeof closeModal === 'function') {
+        closeModal();
+    } else {
+        // Fallback: find and remove the modal
+        const modal = document.querySelector('.modal-overlay') || document.querySelector('.create-listing-modal')?.closest('.modal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.remove();
+        }
+    }
+    window.listingModalData = null;
+};
+
+// Render inventory grid for a category
+function renderInventoryGrid(items) {
+    if (!items || items.length === 0) {
+        return '<div class="no-items-message" style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #888;">No items in this category</div>';
+    }
+    
+    return items.map(item => `
+        <div class="inventory-item-card ${item.equipped ? 'equipped' : ''}" 
+             data-item-id="${item.id}"
+             onclick="selectItemForListing('${item.id}')"
+             style="background: #2a2a3a; border-radius: 6px; padding: 10px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;">
+            
+            <div class="item-image" style="position: relative; height: 60px; margin-bottom: 8px;">
+                <img src="${getInventoryImagePath(item)}" 
+                     alt="${item.name}"
+                     style="width: 100%; height: 100%; object-fit: contain;"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="image-fallback" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 1.5rem; background: #1a1a2a; border-radius: 4px;">
+                    ${getItemEmoji(item.type)}
+                </div>
+                ${item.equipped ? '<div style="position: absolute; top: 2px; right: 2px; background: #ffa726; color: #000; border-radius: 50%; width: 16px; height: 16px; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;">⚡</div>' : ''}
+            </div>
+            
+            <div class="item-info" style="text-align: center;">
+                <div class="item-name" style="font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</div>
+                <div class="item-rarity rarity-${item.rarity || 'common'}" style="font-size: 0.7rem; color: ${getRarityColor(item.rarity)}; margin-bottom: 4px;">
+                    ${item.rarity || 'common'}
+                </div>
+                <div class="item-stats" style="font-size: 0.7rem; color: #ccc;">${getCompactItemStats(item)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Filter inventory items
+window.filterInventoryItems = function() {
+    if (!window.listingModalData) return;
+    
+    const searchTerm = document.getElementById('inventory-search').value.toLowerCase();
+    const filterType = document.getElementById('inventory-filter').value;
+    const grid = document.getElementById('inventory-items-grid');
+    
+    if (!grid) return;
+    
+    const filteredItems = window.listingModalData.inventoryItems.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchTerm);
+        const matchesType = filterType === 'all' || item.type === filterType;
+        return matchesSearch && matchesType;
+    });
+    
+    grid.innerHTML = renderInventoryGrid(filteredItems);
+    
+    // Re-apply selection if any
+    if (window.listingModalData.selectedItem) {
+        const selectedCard = document.querySelector(`[data-item-id="${window.listingModalData.selectedItem.id}"]`);
+        if (selectedCard) {
+            selectedCard.style.borderColor = '#007bff';
+        }
+    }
+};
+
+
+// Switch between inventory categories
+window.switchInventoryCategory = function(category) {
+    if (!window.listingModalData) return;
+    
+    const items = window.listingModalData.itemsByType[category] || [];
+    const grid = document.getElementById('inventory-items-grid');
+    
+    if (grid) {
+        grid.innerHTML = renderInventoryGrid(items);
+    }
+    
+    // Update active tab
+    document.querySelectorAll('.category-tab').forEach(tab => {
+        tab.classList.remove('active');
+        tab.style.background = '#2a2a3a';
+    });
+    const activeTab = document.querySelector(`[data-category="${category}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+        activeTab.style.background = '#007bff';
+    }
+    
+    // Hide listing form if switching categories
+    const listingForm = document.getElementById('listing-form');
+    const preview = document.getElementById('selected-item-preview');
+    if (listingForm) listingForm.style.display = 'none';
+    if (preview) preview.style.display = 'none';
+    
+    window.listingModalData.selectedItem = null;
+};
+
+// Select item for listing
+window.selectItemForListing = function(itemId) {
+    if (!window.listingModalData) return;
+    
+    // Find the item in all categories
+    let selectedItem = null;
+    for (const [category, items] of Object.entries(window.listingModalData.itemsByType)) {
+        const item = items.find(i => i.id === itemId);
+        if (item) {
+            selectedItem = item;
+            break;
+        }
+    }
+    
+    if (!selectedItem) {
+        console.error('Item not found:', itemId);
+        return;
+    }
+    
+    window.listingModalData.selectedItem = selectedItem;
+    
+    // Update UI to show selected state
+    document.querySelectorAll('.inventory-item-card').forEach(card => {
+        card.classList.remove('selected');
+        card.style.borderColor = 'transparent';
+    });
+    
+    const selectedCard = document.querySelector(`[data-item-id="${itemId}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+        selectedCard.style.borderColor = '#007bff';
+    }
+    
+    // Show preview and form
+    const preview = document.getElementById('selected-item-preview');
+    const previewContent = document.getElementById('preview-content');
+    const listingForm = document.getElementById('listing-form');
+    
+    if (preview && previewContent && listingForm) {
+        previewContent.innerHTML = `
+            <div class="preview-item">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <div style="font-size: 2rem;">${getItemEmoji(selectedItem.type)}</div>
+                    <div>
+                        <strong style="color: #fff; font-size: 1.1rem;">${selectedItem.name}</strong>
+                        <div class="item-rarity rarity-${selectedItem.rarity || 'common'}" style="color: ${getRarityColor(selectedItem.rarity)}; font-size: 0.9rem;">
+                            ${selectedItem.rarity || 'common'}
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size: 0.9rem; color: #ccc;">
+                    <div>Type: ${formatItemType(selectedItem.type)}</div>
+                    <div>${getItemStats(selectedItem)}</div>
+                    ${selectedItem.equipped ? '<div style="color: #ffa726; margin-top: 5px;">🔧 Currently Equipped</div>' : ''}
+                </div>
+            </div>
+        `;
+        
+        preview.style.display = 'block';
+        listingForm.style.display = 'block';
+        
+        // Reset form
+        document.getElementById('listing-price').value = '';
+        document.getElementById('price-validation').style.display = 'none';
+        document.getElementById('equipped-warning').style.display = 'none';
+        document.getElementById('create-listing-btn').disabled = true;
+        
+        // Set currency based on item type
+        const currencySelect = document.getElementById('listing-currency-type');
+        const isTokenItem = selectedItem.tokenPrice && selectedItem.tokenPrice > 0;
+        
+        if (isTokenItem) {
+            currencySelect.value = 'tokens';
+            currencySelect.disabled = true;
+            document.getElementById('price-validation').textContent = 'Token items can only be sold for tokens.';
+            document.getElementById('price-validation').style.display = 'block';
+        } else {
+            currencySelect.value = 'gold';
+            currencySelect.disabled = false;
+            document.getElementById('price-validation').style.display = 'none';
+        }
+        
+        // Show equipped warning
+        if (selectedItem.equipped) {
+            document.getElementById('equipped-warning').innerHTML = '⚠️ This item is currently equipped. It will be automatically unequipped when listed.';
+            document.getElementById('equipped-warning').style.display = 'block';
+        }
+        
+        // Add event listener for price input
+        const priceInput = document.getElementById('listing-price');
+        if (priceInput) {
+            priceInput.oninput = function() {
+                validateListingForm();
+            };
+        }
+    }
+};
+
+// Validate listing form
+function validateListingForm() {
+    const priceInput = document.getElementById('listing-price');
+    const createBtn = document.getElementById('create-listing-btn');
+    
+    if (priceInput && createBtn && window.listingModalData && window.listingModalData.selectedItem) {
+        const hasPrice = priceInput.value > 0;
+        createBtn.disabled = !hasPrice;
+        
+        if (hasPrice) {
+            createBtn.style.opacity = '1';
+        } else {
+            createBtn.style.opacity = '0.6';
+        }
+    }
+}
+// Get rarity color
+function getRarityColor(rarity) {
+    const colors = {
+        common: '#ffffff',
+        uncommon: '#1eff00',
+        rare: '#0070dd',
+        epic: '#a335ee',
+        legendary: '#ff8000'
+    };
+    return colors[rarity] || '#ffffff';
+}
+
+// ======================
+// UTILITY FUNCTIONS
+// ======================
+window.cancelListing = async function(listingId) {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const confirm = await window.showCustomConfirm(
+        'Cancel this listing?',
+        'Confirm Cancellation',
+        'This will remove your item from the market and return it to your inventory.'
+    );
+    
+    if (confirm) {
+        try {
+            const listingDoc = await getDoc(doc(db, "marketListings", listingId));
+            if (!listingDoc.exists()) {
+                throw new Error('Listing not found');
+            }
+            
+            const listing = listingDoc.data();
+            
+            if (listing.sellerId !== user.uid) {
+                throw new Error('You can only cancel your own listings');
+            }
+            
+            // 1. Return item to inventory
+            const inventoryRef = doc(collection(db, "users", user.uid, "inventory"));
+            await setDoc(inventoryRef, listing.itemData);
+            
+            // 2. Remove listing
+            await deleteDoc(doc(db, "marketListings", listingId));
+            
+            window.showCustomModal('success', 'Listing Cancelled', 'Your item has been returned to your inventory.');
+            loadMyListings();
+            
+        } catch (error) {
+            console.error('Error canceling listing:', error);
+            window.showCustomModal('error', 'Cancellation Failed', error.message);
+        }
+    }
+};
+
+function getExpiryDate(marketType) {
+    const now = new Date();
+    let days = 7;
+    if (marketType === 'team-market') days = 3;
+    if (marketType === 'weekly-deals') days = 7;
+    return new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function selectRandomItems(items, count) {
+    if (items.length <= count) return items;
+    
+    // Use weighted selection for better variety
+    const weightedItems = items.map(item => {
+        const weight = calculateItemWeight(item);
+        return { item, weight };
+    });
+    
+    // Sort by weight (higher weight = more common)
+    weightedItems.sort((a, b) => b.weight - a.weight);
+    
+    // Take some from top (common), some from middle, some from bottom (rare)
+    const selected = [];
+    const third = Math.floor(count / 3);
+    
+    // Common items
+    for (let i = 0; i < third && i < weightedItems.length; i++) {
+        selected.push(weightedItems[i].item);
+    }
+    
+    // Middle items
+    const middleStart = Math.floor(weightedItems.length / 3);
+    for (let i = middleStart; i < middleStart + third && i < weightedItems.length; i++) {
+        selected.push(weightedItems[i].item);
+    }
+    
+    // Rare items (fill remaining slots)
+    const rareStart = Math.floor(weightedItems.length * 2 / 3);
+    while (selected.length < count && rareStart < weightedItems.length) {
+        const randomIndex = rareStart + Math.floor(Math.random() * (weightedItems.length - rareStart));
+        if (!selected.includes(weightedItems[randomIndex].item)) {
+            selected.push(weightedItems[randomIndex].item);
+        }
+    }
+    
+    // If we still need more, just take random ones
+    while (selected.length < count) {
+        const randomItem = items[Math.floor(Math.random() * items.length)];
+        if (!selected.includes(randomItem)) {
+            selected.push(randomItem);
+        }
+    }
+    
+    return selected;
+}
+
+function applyDiscountToItem(item, discountRange) {
+    const discountRate = discountRange.min + Math.random() * (discountRange.max - discountRange.min);
+    
+    // WEEKLY DEALS ONLY USE GOLD - ensure no token prices
+    const discountedPrice = Math.max(1, Math.floor(item.price_gold * (1 - discountRate)));
+    
+    return {
+        itemType: item.collection || item.type || 'unknown',
+        itemData: item,
+        sellerId: 'system',
+        sellerName: 'Weekly Deals',
+        price: discountedPrice,
+        originalPrice: item.price_gold,
+        tokenPrice: 0, // Force token price to 0 for weekly deals
+        originalTokenPrice: 0,
+        marketType: 'weekly-deals',
+        discount: discountRate,
+        quantity: 1
+    };
+}
+
+function calculateItemWeight(item) {
+    let weight = 1;
+    
+    const rarityWeights = {
+        common: 10,      // More common items
+        uncommon: 6,     // Fairly common
+        rare: 3,         // Less common
+        epic: 1,         // Rare
+        legendary: 0.1   // Very rare
+    };
+    
+    weight *= rarityWeights[item.rarity] || 5;
+    
+    // Price-based weighting - cheaper items more common
+    const price = item.price_gold || item.tokenPrice || 1000;
+    const priceWeight = price > 5000 ? 0.5 : price < 500 ? 2 : 1.5;
+    weight *= priceWeight;
+    
+    return weight;
+}
+
+
+// Complete fix function
+window.fixEverything = async function() {
+    console.log('🔧 Fixing everything...');
+    
+    // 1. Delete all existing weekly deals
+    const weeklyDealsQuery = query(
+        collection(db, "marketListings"),
+        where("marketType", "==", "weekly-deals")
+    );
+    const weeklyDealsSnapshot = await getDocs(weeklyDealsQuery);
+    
+    console.log(`🗑️ Deleting ${weeklyDealsSnapshot.size} existing weekly deals...`);
+    const deletePromises = [];
+    weeklyDealsSnapshot.forEach((doc) => {
+        deletePromises.push(deleteDoc(doc.ref));
+    });
+    await Promise.all(deletePromises);
+    
+    // 2. Generate new weekly deals without token items
+    await generateWeeklyDealsManual();
+    
+    console.log('✅ Everything fixed!');
+};
+
+// ======================
+// ITEM DISPLAY
+// ======================
+
+function displayListings(grid, listings, type) {
+    if (listings.length === 0) {
+        grid.innerHTML = '<div class="loading-message">No items found</div>';
+        return;
+    }
+    
+    grid.innerHTML = listings.map(listing => {
+        const discountPercent = Math.round((listing.discount || 0) * 100);
+        const itemData = listing.itemData || {};
+        const rarity = itemData.rarity || 'common';
+        
+        // Check if item costs tokens or gold
+        const itemCostsTokens = listing.tokenPrice && listing.tokenPrice > 0;
+        const displayPrice = itemCostsTokens ? listing.tokenPrice : listing.price;
+        const currencySymbol = itemCostsTokens ? '🔹' : '💰';
+        const currencyName = itemCostsTokens ? 'tokens' : 'gold';
+        const originalPrice = itemCostsTokens ? listing.originalTokenPrice : listing.originalPrice;
+        
+        // Check player level for purchase restrictions
+        const playerLevel = window.currentPlayerLevel || 1;
+        const itemLevel = itemData.minimumRequiredLevel || 1;
+        const canPurchase = playerLevel >= itemLevel;
+        
+        // Ensure likes data exists and is fresh
+        const likes = listing.likes || 0;
+        const views = listing.views || 0;
+        const likedBy = listing.likedBy || [];
+        const userId = auth.currentUser?.uid;
+        const isLiked = userId ? likedBy.includes(userId) : false;
+        
+        // Increment views when displaying
+        if (!sessionStorage.getItem(`viewed_${listing.id}`)) {
+            incrementListingViews(listing.id);
+            sessionStorage.setItem(`viewed_${listing.id}`, 'true');
+        }
+        
+        return `
+                    <div class="market-item-card rarity-${rarity} ${type === 'weekly-deals' ? 'weekly-deal' : ''}" data-listing-id="${listing.id}">
+
+                    <div class="rarity-container">
+        <div class="rarity-${rarity}">
+            <div class="rarity-tag">${rarity}</div>
+        </div>
+    </div>
+                <div class="item-image">
+                    ${getItemImage(listing)}                    
+                </div>
+                
+                
+               <div class="item-header">
+    <div class="item-name">${itemData.name || 'Unknown Item'}</div>    
+</div>
+                
+                <div class="item-stats">
+                    ${getItemStats(itemData)}
+                    ${!canPurchase ? `<div class="level-warning">⚠️ Requires Level ${itemLevel}</div>` : ''}
+                    ${type !== 'my' ? `<div class="seller-info">Seller: ${listing.sellerName || 'Unknown'}</div>` : ''}
+                </div>
+                
+                <div class="item-engagement">
+                    <span class="engagement-item">👁️ ${views}</span>
+                    <span class="engagement-item">❤️ ${likes}</span>
+                    <button class="like-btn ${isLiked ? 'liked' : ''}" 
+                            onclick="toggleItemLike('${listing.id}')" 
+                            data-listing-id="${listing.id}">
+                        ${isLiked ? '💔 Unlike' : '💖 Like'}
+                    </button>
+                </div>
+                
+                <div class="item-price ${itemCostsTokens ? 'token-price' : 'gold-price'}">
+                    <div>
+                        <div class="current-price">
+                            ${currencySymbol} ${displayPrice} ${currencyName}
+                        </div>
+                        ${originalPrice && originalPrice > displayPrice ? `
+                            <div class="original-price">${currencySymbol} ${originalPrice} ${currencyName}</div>
+                        ` : ''}
+                    </div>
+                    ${discountPercent > 0 ? `
+                        <div class="discount-badge">-${discountPercent}%</div>
+                    ` : ''}
+                </div>
+                
+                ${type === 'my' ? `
+                    <button class="buy-btn ${itemCostsTokens ? 'token-btn' : 'gold-btn'}" disabled>
+                        YOUR LISTING
+                    </button>
+                    <button class="cancel-btn" onclick="cancelListing('${listing.id}')">
+                        CANCEL LISTING
+                    </button>
+                ` : `
+                    ${canPurchase ? `
+                        <button class="buy-btn ${itemCostsTokens ? 'token-btn' : 'gold-btn'}" 
+                                onclick="buyMarketItem('${listing.id}')">
+                            BUY NOW - ${currencySymbol} ${displayPrice}
+                        </button>
+                    ` : `
+                        <button class="buy-btn level-locked" disabled>
+                            LEVEL ${itemLevel}+ REQUIRED
+                        </button>
+                    `}
+                `}
+            </div>
+        `;
+    }).join('');
+}
+
+// Clean up and start fresh
+window.cleanupWeeklyDeals = async function() {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            console.log('❌ Not logged in');
+            return;
+        }
+        
+        console.log('🗑️ Starting weekly deals cleanup...');
+        
+        // Get all weekly deals
+        const weeklyDealsQuery = query(
+            collection(db, "marketListings"),
+            where("marketType", "==", "weekly-deals")
+        );
+        const weeklyDealsSnapshot = await getDocs(weeklyDealsQuery);
+        
+        console.log(`🗑️ Found ${weeklyDealsSnapshot.size} weekly deals to delete...`);
+        
+        // Delete all weekly deals
+        const deletePromises = [];
+        weeklyDealsSnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+        await Promise.all(deletePromises);
+        
+        console.log('✅ All weekly deals deleted. Ready for fresh generation.');
+        
+        // Generate new weekly deals
+        await generateWeeklyDealsManual();
+        
+    } catch (error) {
+        console.error('Error cleaning up weekly deals:', error);
+    }
+};
+
+// Run it like this in console:
+// cleanupWeeklyDeals()
+
+function getItemImage(listing) {
+    const itemData = listing.itemData || {};
+    
+    // Use the same logic for ALL market types
+    const imageFields = ['image', 'imageUrl', 'icon', 'img', 'picture', 'thumbnail'];
+    let imageUrl = null;
+    
+    for (const field of imageFields) {
+        if (itemData[field] && typeof itemData[field] === 'string') {
+            imageUrl = itemData[field];
+            break;
+        }
+    }
+    
+    // If no image found, use fallback with multiple filename attempts
+    if (!imageUrl) {
+        const itemType = listing.itemType || itemData.type || 'default';
+        const originalName = itemData.name || 'default';
+        
+        // Proper plural mapping - ADD CONSUMABLE HERE
+        const pluralMap = {
+            'car': 'cars', 
+            'engine': 'engines', 
+            'tire': 'tires',
+            'seat': 'seats', 
+            'suspension': 'suspensions', 
+            'turbo': 'turbos',
+            'consumable': 'consumables', // ADD THIS LINE
+            'default': 'items'
+        };
+        
+        const folderName = pluralMap[itemType] || itemType;
+        
+        // Try multiple filename variations
+        const filenameVariations = [
+            // Original name with spaces replaced by underscores
+            originalName.toLowerCase().replace(/\s+/g, '_'),
+            // Keep hyphens, replace spaces with underscores (for "old-worn out" -> "old-worn_out")
+            originalName.toLowerCase().replace(/\s+/g, '_'),
+            // Replace both hyphens and spaces with underscores (for "all-terrain grip" -> "all_terrain_grip")
+            originalName.toLowerCase().replace(/[-\s]/g, '_'),
+            // Remove all special characters except letters and numbers
+            originalName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_'),
+            // Simple type-based fallback
+            itemType + '_item'
+        ];
+        
+        // Remove duplicates
+        const uniqueVariations = [...new Set(filenameVariations)];
+        
+        // Create image tags that try each variation
+        const imageTags = uniqueVariations.map((filename, index) => {
+            const variationUrl = `images/${folderName}/${filename}.jpg`;
+            const displayStyle = index === 0 ? 'block' : 'none';
+            
+            return `
+                <img src="${variationUrl}" 
+                     alt="${itemData.name}" 
+                     style="width: 100%; height: 100%; object-fit: contain; background: #2a2a3a; border-radius: 8px; display: ${displayStyle};"
+                     onerror="if(this.style.display !== 'none') { 
+                         console.log('❌ Image failed:', this.src); 
+                         this.style.display = 'none'; 
+                         const next = this.nextElementSibling; 
+                         if(next && next.tagName === 'IMG') next.style.display = 'block'; 
+                         else if(next && next.className === 'image-fallback') next.style.display = 'flex';
+                     }"
+                     onload="console.log('✅ Image loaded:', this.src)">
+            `;
+        }).join('');
+        
+        return `
+            ${imageTags}
+            <div class="image-fallback" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 2rem; background: #2a2a3a; border-radius: 8px;">
+                ${getItemEmoji(listing.itemType || itemData.type)}
+            </div>
+        `;
+    }
+    
+    // Clean up existing image URLs
+    imageUrl = imageUrl.replace('items/', '');
+    
+    // Fix common path issues
+    if (imageUrl.includes('turboss')) imageUrl = imageUrl.replace('turboss', 'turbos');
+    if (imageUrl.includes('enginess')) imageUrl = imageUrl.replace('enginess', 'engines');
+    if (imageUrl.includes('consumable')) imageUrl = imageUrl.replace('consumable', 'consumables'); // ADD THIS LINE
+    
+    if (!imageUrl.startsWith('http') && !imageUrl.startsWith('/') && !imageUrl.startsWith('images/')) {
+        imageUrl = `images/${imageUrl}`;
+    }
+    
+    return `
+        <img src="${imageUrl}" alt="${itemData.name}" 
+             onerror="console.log('❌ Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';"
+             style="width: 100%; height: 100%; object-fit: contain; background: #2a2a3a; border-radius: 8px;">
+        <div class="image-fallback" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 2rem; background: #2a2a3a; border-radius: 8px;">
+            ${getItemEmoji(listing.itemType || itemData.type)}
+        </div>
+    `;
+}
+// Add this utility function at the top with other utility functions
+function generateId() {
+    return 'item_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function getItemStats(itemData) {
+    const stats = [];
+    
+    // Show level requirement if it exists
+    if (itemData.minimumRequiredLevel) {
+        stats.push(`Level ${itemData.minimumRequiredLevel}`);
+    }
+    
+    // Check for stats in different possible locations
+    const statFields = {
+        dexterity: 'Dex', 
+        handling: 'Hand', 
+        power: 'Pwr', 
+        speed: 'Spd',
+        structure: 'Struct', 
+        luck: 'Luck', 
+        boost: 'Boost',
+        acceleration: 'Accel',
+        grip: 'Grip',
+        weight: 'Weight'
+    };
+    
+    // First check itemData.stats object
+    if (itemData.stats && typeof itemData.stats === 'object') {
+        for (const [field, abbreviation] of Object.entries(statFields)) {
+            if (itemData.stats[field] > 0) {
+                stats.push(`${abbreviation}: ${itemData.stats[field]}`);
+            }
+        }
+    }
+    
+    // Then check direct properties on itemData
+    for (const [field, abbreviation] of Object.entries(statFields)) {
+        if (itemData[field] > 0) {
+            stats.push(`${abbreviation}: ${itemData[field]}`);
+        }
+    }
+    
+    // If no stats found, show some default info
+    if (stats.length === 0) {
+        if (itemData.type) {
+            stats.push(`${formatItemType(itemData.type)}`);
+        }
+        if (itemData.price_gold > 0) {
+            stats.push(`💰 ${itemData.price_gold}g`);
+        }
+        if (itemData.tokenPrice > 0) {
+            stats.push(`🔹 ${itemData.tokenPrice}`);
+        }
+    }
+    
+    return stats.length > 0 ? stats.join(' • ') : 'Standard Item';
+}
+
+function getItemEmoji(itemType) {
+    const emojis = {
+        cars: '🚗', engines: '⚙️', tires: '🌀', seats: '💺',
+        suspensions: '🔄', turbos: '💨', consumables: '🧪'
+    };
+    return emojis[itemType] || '📦';
+}
+
+async function updateWeeklyDealsTimer() {
+    try {
+        const config = await getMarketConfig();
+        if (!config?.weeklyDeals?.endDate) return;
+        
+        const endDate = config.weeklyDeals.endDate.toDate ? 
+            config.weeklyDeals.endDate.toDate() : 
+            new Date(config.weeklyDeals.endDate);
+            
+        const now = new Date();
+        const timeLeft = endDate - now;
+        
+        const timerElement = document.getElementById('deals-countdown');
+        if (!timerElement) return;
+        
+        if (timeLeft > 0) {
+            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            timerElement.textContent = `${days}d ${hours}h`;
+            timerElement.style.color = '#2ecc71';
+        } else {
+            timerElement.textContent = 'Refreshing soon...';
+            timerElement.style.color = '#ff6b35';
+        }
+    } catch (error) {
+        console.error('Error updating timer:', error);
+    }
+}
+
+// Manual generation function
+window.generateWeeklyDealsManual = async function() {
+    console.log('🔄 Manually generating weekly deals...');
+    weeklyDealsGenerated = false;
+    await generateWeeklyDealsSilent();
+    await loadWeeklyDeals();
+};
+
+// ======================
+// INITIALIZATION
+// ======================
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('market-section') || document.querySelector('.market-tabs')) {
+        console.log('🛒 Market section detected, initializing...');
+        
+        const initMarket = () => {
+            if (auth.currentUser) {
+                initializeMarketSystem();
+                initializeMarketDisplay();
+            } else {
+                setTimeout(initMarket, 1000);
+            }
+        };
+        
+        setTimeout(initMarket, 500);
     }
 });
 
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    cleanupMarketListeners();
+});
+
+console.log('✅ Fixed Market System Loaded - All Issues Resolved');
+
+// Add missing notification function if needed
+if (!window.createNotification) {
+    window.createNotification = async function(userId, message, type = 'info') {
+        try {
+            await addDoc(collection(db, "notifications"), {
+                userId: userId,
+                message: message,
+                type: type,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+            console.log('✅ Notification created for user:', userId);
+        } catch (error) {
+            console.error('Error creating notification:', error);
+        }
+    };
+}
+
+// ======================
+// DEBUG FUNCTION TO VERIFY INVENTORY
+// ======================
+
+window.debugMarketInventory = async function() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.log("❌ No user logged in");
+        return;
+    }
+    
+    console.log("=== DEBUG MARKET INVENTORY ===");
+    console.log("User ID:", user.uid);
+    
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            console.log("💰 Gold:", userData.gold);
+            console.log("🔹 Tokens:", userData.tokens);
+            console.log("🎒 Inventory Array:", userData.inventory);
+            
+            if (userData.inventory && Array.isArray(userData.inventory)) {
+                console.log(`📦 Inventory has ${userData.inventory.length} items:`);
+                userData.inventory.forEach((item, index) => {
+                    console.log(`   ${index + 1}.`, {
+                        id: item.id,
+                        name: item.name,
+                        type: item.type,
+                        rarity: item.rarity,
+                        equipped: item.equipped,
+                        stats: item.stats
+                    });
+                });
+            } else {
+                console.log("❌ No inventory array found");
+            }
+        } else {
+            console.log("❌ User document not found");
+        }
+        
+    } catch (error) {
+        console.error("Debug error:", error);
+    }
+};
+
+async function fixWeeklyDealsSellers() {
+    const weeklyDeals = await getMarketListings('weekly-deals');
+    console.log(`🛠️ Fixing ${weeklyDeals.length} weekly deals seller names...`);
+    
+    for (const deal of weeklyDeals) {
+        if (deal.sellerId !== 'system') {
+            await updateDoc(doc(db, "marketListings", deal.id), {
+                sellerId: 'system',
+                sellerName: 'Weekly Deals'
+            });
+            console.log(`✅ Fixed: ${deal.itemData.name}`);
+        }
+    }
+    console.log('🎉 All weekly deals seller names fixed!');
+}
+
+
+// Test the inventory system on load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        if (auth.currentUser) {
+            console.log("🔍 Testing market inventory connection...");
+            window.debugMarketInventory();
+        }
+    }, 2000);
+});
+
+console.log('✅ Fixed Market System Loaded');
 
 // ========== ULTRA-SAFE CLEANUP ==========
 async function safeUserChallengeCleanup() {
@@ -10884,6 +13303,39 @@ function showAchievementUnlockedNotification(achievement) {
     }, 5000);
 }
 
+// ========== GET ALL SHOP ITEMS FROM YOUR COLLECTIONS ==========
+async function getAllShopItems() {
+    console.log('🛍️ Loading shop items from collections...');
+    
+    const collections = ['cars', 'engines', 'seats', 'suspensions', 'tires', 'turbos'];
+    const allItems = [];
+    
+    for (const collectionName of collections) {
+        try {
+            console.log(`📁 Loading ${collectionName}...`);
+            const snapshot = await getDocs(collection(db, collectionName));
+            
+            snapshot.forEach(doc => {
+                const itemData = doc.data();
+                allItems.push({
+                    ...itemData,
+                    id: doc.id,
+                    collection: collectionName, // Track which collection it came from
+                    itemType: collectionName // Use collection name as item type
+                });
+            });
+            
+            console.log(`✅ Loaded ${snapshot.size} ${collectionName}`);
+        } catch (error) {
+            console.log(`❌ No items in ${collectionName} collection or access denied`);
+        }
+    }
+    
+    console.log(`🎯 Total shop items loaded: ${allItems.length}`);
+    return allItems;
+}
+
+
 // ========== DEBUG FUNCTIONS ==========
 window.debugAchievements = function() {
     console.log('🔍 Achievement Debug Info:');
@@ -11491,6 +13943,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
 });
 
+// Write batch function (if missing)
+const writeBatch = function() {
+    // This should be imported from Firebase
+    // If not available, use individual updates
+    return {
+        update: async (docRef, data) => {
+            await updateDoc(docRef, data);
+        },
+        set: async (docRef, data) => {
+            await setDoc(docRef, data);
+        },
+        commit: async () => {
+            // Individual updates are already committed
+            return Promise.resolve();
+        }
+    };
+}();
+
 
 
 // ========= IGNITION TOKENS ==========
@@ -11839,6 +14309,15 @@ window.currentTeam = null;
 window.teamMembers = [];
 window.teamJoinRequests = [];
 window.currentTeamsTab = 'my-team'; // Default tab
+window.buyMarketItem = buyMarketItem;
+window.cancelListing = cancelListing;
+window.toggleItemLike = toggleItemLike;
+window.loadWeeklyDeals = loadWeeklyDeals;
+window.loadPlayerMarket = loadPlayerMarket;
+window.loadTeamMarket = loadTeamMarket;
+window.loadMyListings = loadMyListings;
+
+
 
 
 if (typeof currentTeam === 'undefined') window.currentTeam = null;
